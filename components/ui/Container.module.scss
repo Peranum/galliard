@@ -1,0 +1,19 @@
+.container {
+  width: min(1160px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.wideContainer {
+  width: min(1920px, calc(100% - 0.9rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .container {
+    width: min(1160px, calc(100% - 3rem));
+  }
+
+  .wideContainer {
+    width: min(1920px, calc(100% - 1.4rem));
+  }
+}

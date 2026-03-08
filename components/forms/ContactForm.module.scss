@@ -1,0 +1,65 @@
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.consent {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  color: var(--color-muted);
+}
+
+.consent input {
+  margin-top: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+.error {
+  margin: 0;
+  color: #a20f36;
+  font-size: 0.82rem;
+}
+
+.success {
+  display: grid;
+  gap: 1rem;
+  background: linear-gradient(150deg, rgba(27, 93, 158, 0.11), rgba(255, 255, 255, 0.78));
+  border: 1px solid rgba(27, 93, 158, 0.2);
+  border-radius: 1.2rem;
+  padding: clamp(1.25rem, 3vw, 1.8rem);
+}
+
+.success h3 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.35rem, 2.3vw, 1.7rem);
+}
+
+.success p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

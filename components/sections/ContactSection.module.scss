@@ -1,0 +1,99 @@
+.section {
+  padding: 4.2rem 0 7rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.infoCard,
+.formCard {
+  border-radius: 1.1rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  padding: 1.2rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.infoCard h2 {
+  margin: 0.8rem 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.55rem, 4.8vw, 2.1rem);
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 0.9rem 0 0;
+  color: var(--color-muted);
+  line-height: 1.65;
+}
+
+.infoCard dl {
+  margin: 1.2rem 0 0;
+  display: grid;
+  gap: 0.95rem;
+}
+
+.infoCard div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.infoCard dt {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.infoCard dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.infoCard a {
+  color: var(--color-ink);
+}
+
+.formCard h3 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.formCard p {
+  margin: 0.55rem 0 1rem;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding: 5.4rem 0 7.5rem;
+  }
+
+  .infoCard,
+  .formCard {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  .section {
+    padding-bottom: 5.8rem;
+  }
+}

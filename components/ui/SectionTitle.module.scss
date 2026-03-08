@@ -1,0 +1,33 @@
+.wrapper {
+  display: grid;
+  gap: 0.875rem;
+  max-width: 760px;
+  margin-bottom: 2.2rem;
+}
+
+.centered {
+  margin-inline: auto;
+  text-align: center;
+}
+
+.eyebrow {
+  font-size: 0.74rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #7a7b74;
+  font-weight: 800;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+  line-height: 1.16;
+  letter-spacing: -0.015em;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.65;
+}

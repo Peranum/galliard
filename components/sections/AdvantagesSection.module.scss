@@ -1,0 +1,38 @@
+.section {
+  padding: 4.2rem 0;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  border-radius: 1rem;
+  border: 1px solid rgba(227, 236, 247, 0.4);
+  background: linear-gradient(160deg, #0f172a, #1e293b);
+  color: #e2e8f0;
+  padding: 1.25rem;
+}
+
+.card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #f8fafc;
+}
+
+.card p {
+  margin: 0.8rem 0 0;
+  line-height: 1.6;
+  color: #cbd5e1;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding: 5.4rem 0;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

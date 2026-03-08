@@ -1,0 +1,87 @@
+.section {
+  padding: 4.2rem 0;
+}
+
+.metrics,
+.cases {
+  display: grid;
+  gap: 1rem;
+}
+
+.metricCard,
+.caseCard {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 1rem;
+  background: #fff;
+  padding: 1.2rem;
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 1.8rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.metricCard h3,
+.caseCard h3 {
+  margin: 0.85rem 0 0;
+  font-size: 1.02rem;
+}
+
+.metricCard p,
+.caseCard p {
+  margin: 0.65rem 0 0;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.caseResult {
+  color: var(--color-accent) !important;
+  font-weight: 700;
+}
+
+.partnerWrap {
+  margin-top: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 1rem;
+  background: #fff;
+  padding: 1.2rem;
+}
+
+.partnerWrap h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.partnerWrap ul {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.partnerWrap li {
+  border: 1px solid rgba(15, 23, 42, 0.13);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding: 5.4rem 0;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cases {
+    margin-top: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
