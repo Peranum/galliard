@@ -1,5 +1,5 @@
 .page {
-  --content-max: 1480px;
+  --content-max: 1360px;
   --page-gutter: clamp(0.8rem, 2vw, 1.25rem);
   --background: #f1eee8;
   --background-gradient-start: #f8f6f2;
@@ -131,7 +131,7 @@
   position: fixed;
   z-index: 80;
   inset: 0 0 auto;
-  padding: 0.8rem 0;
+  padding: 1.35rem 0 0.8rem;
 }
 
 .card {
@@ -982,7 +982,7 @@ textarea.softInput {
 
 @media (min-width: 768px) {
   .header {
-    padding: 1rem 0;
+    padding: 1.8rem 0 1rem;
   }
 
   .navCard {

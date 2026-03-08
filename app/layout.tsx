@@ -23,7 +23,10 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Галльярд | Прямые поставки сырья из Китая",
+  title: {
+    default: "Галльярд",
+    template: "%s | Галльярд"
+  },
   description:
     "Галльярд организует прямые поставки промышленного сырья из Китая в Беларусь: от поиска поставщика до таможенного оформления и логистики.",
   openGraph: {
@@ -43,7 +46,10 @@ export const metadata: Metadata = {
       }
     ]
   },
-  metadataBase: new URL("https://example.by")
+  metadataBase: new URL("https://galliard.by"),
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }]
+  }
 };
 
 export default function RootLayout({
