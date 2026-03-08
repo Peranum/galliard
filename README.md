@@ -32,6 +32,8 @@ cp .env.example .env
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 
+`docker compose` автоматически подхватит значения из файла `.env` в корне проекта.
+
 ## Docker
 
 ```bash
@@ -43,3 +45,20 @@ docker compose up -d --build
 ```bash
 docker compose down
 ```
+
+### Домен `galliard.by` + HTTPS
+
+В `docker-compose` уже добавлен `caddy`, который автоматически получает TLS-сертификаты для:
+
+- `galliard.by`
+- `www.galliard.by`
+
+Нужно сделать на DNS:
+
+- `A` запись `galliard.by` -> IP вашего сервера
+- `A` запись `www.galliard.by` -> IP вашего сервера
+
+И на сервере открыть порты:
+
+- `80/tcp`
+- `443/tcp`
