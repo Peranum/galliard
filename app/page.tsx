@@ -21,7 +21,7 @@ export default function HomePage() {
     name: "Галльярд",
     url: "https://example.by",
     email: "info@galliard.by",
-    telephone: "+375291234567"
+    telephone: "+375292954985"
   };
 
   const breadcrumbLd = {
@@ -42,7 +42,7 @@ export default function HomePage() {
     "@type": "LocalBusiness",
     name: "Галльярд",
     areaServed: ["BY", "RU"],
-    telephone: "+375291234567",
+    telephone: "+375292954985",
     email: "info@galliard.by",
     openingHours: "Mo-Fr 09:00-18:00",
     description:

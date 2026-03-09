@@ -58,7 +58,7 @@ const services: ServiceItem[] = [
     icon: Shield,
     title: "Контроль качества",
     description:
-      "Инспекция на производстве, проверка образцов, контроль соответствия спецификациям перед отгрузкой."
+      "Инспекция на производстве, проверка образцов, контроль соответствия спецификациям и стандартам ЕАЭС перед отгрузкой."
   },
   {
     icon: FileCheck,
@@ -95,7 +95,7 @@ const advantages: AdvantageItem[] = [
   {
     icon: Clock,
     title: "Сжатые сроки",
-    description: "Сроки логистики рассчитываем конкретно под ваш запрос и формат поставки."
+    description: "Сроки логистики рассчитываем под ваш запрос и формат поставки: от 14 дней."
   },
   {
     icon: Shield,
@@ -490,8 +490,7 @@ export function SoftLanding() {
                 <article className={`${styles.card} ${styles.contactInfoCard}`}>
                   <Phone className={styles.iconLarge} strokeWidth={1.6} />
                   <h4>Телефон</h4>
-                  <a href="tel:+375291234567">+375 29 123-45-67</a>
-                  <a href="tel:+375291234568">+375 29 123-45-68</a>
+                  <a href="tel:+375292954985">+375 29 295-49-85</a>
                 </article>
 
                 <article className={`${styles.card} ${styles.contactInfoCard}`}>
@@ -591,7 +590,7 @@ export function SoftLanding() {
                             id="phone"
                             name="phone"
                             onChange={handleInputChange}
-                            placeholder="+375 29 123-45-67"
+                            placeholder="+375 29 295-49-85"
                             required
                             type="tel"
                             value={formData.phone}
@@ -672,9 +671,9 @@ export function SoftLanding() {
             <div>
               <h4>Контакты</h4>
               <div className={styles.footerLinks}>
-                <a href="tel:+375291234567">
+                <a href="tel:+375292954985">
                   <Phone className={styles.iconSmall} />
-                  +375 29 123-45-67
+                  +375 29 295-49-85
                 </a>
                 <a href="mailto:info@galliard.by">
                   <Mail className={styles.iconSmall} />
