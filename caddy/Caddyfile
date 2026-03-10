@@ -49,12 +49,34 @@ admin.galliard.by {
 # HTTPS_BIND=127.0.0.1
 # HTTPS_PORT=8443
 # SKIP_LETS_ENCRYPT=y
-mail.galliard.by, autodiscover.galliard.by, autoconfig.galliard.by {
+mail.galliard.by {
   encode zstd gzip
   reverse_proxy https://host.docker.internal:8443 {
     transport http {
       tls_insecure_skip_verify
+      tls_server_name mail.galliard.by
     }
+    header_up Host mail.galliard.by
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Host {host}
+  }
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
+autodiscover.galliard.by, autoconfig.galliard.by {
+  encode zstd gzip
+  reverse_proxy https://host.docker.internal:8443 {
+    transport http {
+      tls_insecure_skip_verify
+      tls_server_name mail.galliard.by
+    }
+    header_up Host {host}
     header_up X-Forwarded-Proto https
     header_up X-Forwarded-Host {host}
   }
