@@ -101,7 +101,7 @@ npm run dev:admin
 Ниже схема, которая не конфликтует с текущим Caddy/CRM стеком:
 - Mailcow обслуживает SMTP/IMAP порты напрямую (`25/465/587/993/...`).
 - Web UI Mailcow работает локально на `127.0.0.1:8080`.
-- Публичный HTTPS для `mail.galliard.by` отдает Caddy (reverse proxy -> `127.0.0.1:8080`).
+- Публичный HTTPS для `mail.galliard.by` отдает Caddy (reverse proxy -> `host.docker.internal:8080` из контейнера Caddy).
 
 ### 1) DNS записи
 
@@ -147,6 +147,13 @@ docker compose up -d
 - `mail.galliard.by`
 - `autodiscover.galliard.by`
 - `autoconfig.galliard.by`
+
+Также в `docker-compose.yml` у сервиса `caddy` добавлен:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
 
 Перезапуск Caddy:
 

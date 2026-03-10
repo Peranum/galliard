@@ -38,7 +38,12 @@ admin.galliard.by {
 }
 
 # Mailcow web entrypoints (UI, autodiscover, autoconfig)
-# Requires mailcow nginx bound locally:
+# Caddy runs in container, so for host-bound Mailcow nginx use host gateway:
+# reverse_proxy host.docker.internal:8080
+# and set in docker-compose for caddy:
+# extra_hosts:
+#   - "host.docker.internal:host-gateway"
+# Mailcow recommended:
 # HTTP_BIND=127.0.0.1
 # HTTP_PORT=8080
 # HTTPS_BIND=127.0.0.1
@@ -46,7 +51,7 @@ admin.galliard.by {
 # SKIP_LETS_ENCRYPT=y
 mail.galliard.by, autodiscover.galliard.by, autoconfig.galliard.by {
   encode zstd gzip
-  reverse_proxy 127.0.0.1:8080
+  reverse_proxy host.docker.internal:8080
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"

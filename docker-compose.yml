@@ -127,6 +127,8 @@ services:
       - "443:443"
       - "8088:8088"
       - "8089:8089"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
