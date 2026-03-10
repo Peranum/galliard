@@ -65,7 +65,7 @@ export default function TasksPage() {
       </form>
 
       <section className="card" style={{ marginBottom: 12 }}>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label className="checkbox-line">
           <input type="checkbox" checked={criticalOnly} onChange={(e) => setCriticalOnly(e.target.checked)} />
           Показать только критичные
         </label>

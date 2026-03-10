@@ -103,7 +103,7 @@ export default function CampaignsPage() {
 
       <section className="card" style={{ marginBottom: 12 }}>
         <h3>Список рассылок</h3>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="inline-actions">
           <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
             <option value="">Выбери рассылку</option>
             {items.map((campaign) => (
@@ -149,7 +149,7 @@ export default function CampaignsPage() {
                   <td>{message.leadName}</td>
                   <td>{message.leadEmail || "—"}</td>
                   <td>{messageStatusLabel(message.status)}</td>
-                  <td style={{ display: "flex", gap: 6 }}>
+                  <td className="table-actions">
                     <button onClick={() => void markMessage(message.id, "replied")}>Ответ</button>
                     <button onClick={() => void markMessage(message.id, "bounced")}>Возврат</button>
                     <button onClick={() => void markMessage(message.id, "unsubscribed")}>Отписка</button>

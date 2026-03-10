@@ -113,7 +113,7 @@ export const companyCategoryOptions: CompanyCategoryOption[] = [
 
 export function companyCategoryLabel(value: string): string {
   const normalized = value.toUpperCase();
-  return companyCategoryOptions.find((item) => item.value === normalized)?.label ?? "Другое";
+  return companyCategoryOptions.find((item) => item.value === normalized)?.label ?? value;
 }
 
 export function companySubcategoryOptions(category: string): CompanySubcategoryOption[] {

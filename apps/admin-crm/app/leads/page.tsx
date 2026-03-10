@@ -13,6 +13,32 @@ import {
 
 const stageOptions = ["", "NEW", "CONTACTED", "REPLIED", "QUALIFIED", "SOURCING", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
 const stageValues = stageOptions.filter((stage): stage is Exclude<(typeof stageOptions)[number], ""> => Boolean(stage));
+const CUSTOM_CATEGORY_OPTION = "__CUSTOM_CATEGORY__";
+const CUSTOM_CATEGORIES_STORAGE_KEY = "galliard_custom_company_categories_v1";
+const categoryExamples = companyCategoryOptions
+  .filter((item) => item.value !== "OTHER")
+  .slice(0, 4)
+  .map((item) => item.label)
+  .join(", ");
+
+function normalizeCustomCategory(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function loadCustomCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_CATEGORIES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => normalizeCustomCategory(String(item)))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 type LeadFormState = {
   name: string;
@@ -51,15 +77,59 @@ export default function LeadsPage() {
 
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
-  const [companyCategory, setCompanyCategory] = useState("OTHER");
+  const [companyCategory, setCompanyCategory] = useState("");
+  const [companyCustomCategory, setCompanyCustomCategory] = useState("");
   const [companySubcategory, setCompanySubcategory] = useState("");
   const [phone, setPhone] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [modalCustomCategory, setModalCustomCategory] = useState("");
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadForm, setLeadForm] = useState<LeadFormState | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsSaving, setDetailsSaving] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+
+  const knownCategoryValues = useMemo(
+    () => new Set(companyCategoryOptions.map((item) => item.value.toUpperCase())),
+    []
+  );
+
+  const mergeCustomCategories = useCallback((existing: string[], incoming: string[]) => {
+    const map = new Map(existing.map((item) => [item.toUpperCase(), item]));
+    for (const item of incoming) {
+      const normalized = normalizeCustomCategory(item);
+      if (!normalized) continue;
+      if (knownCategoryValues.has(normalized.toUpperCase())) continue;
+      if (!map.has(normalized.toUpperCase())) {
+        map.set(normalized.toUpperCase(), normalized);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "ru"));
+  }, [knownCategoryValues]);
+
+  const persistCustomCategories = useCallback((next: string[]) => {
+    setCustomCategories(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+    }
+  }, []);
+
+  const registerCustomCategory = useCallback((value: string) => {
+    const normalized = normalizeCustomCategory(value);
+    if (!normalized) return;
+    if (knownCategoryValues.has(normalized.toUpperCase())) return;
+    setCustomCategories((prev) => {
+      const next = mergeCustomCategories(prev, [normalized]);
+      if (next.length !== prev.length) {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+        }
+      }
+      return next;
+    });
+  }, [knownCategoryValues, mergeCustomCategories]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,7 +147,11 @@ export default function LeadsPage() {
     if (sortDirParam === "asc" || sortDirParam === "desc") {
       setSortDir(sortDirParam);
     }
-  }, []);
+    const fromStorage = loadCustomCategories();
+    if (fromStorage.length) {
+      persistCustomCategories(mergeCustomCategories([], fromStorage));
+    }
+  }, [mergeCustomCategories, persistCustomCategories]);
 
   const load = useCallback(async (nextPage = page) => {
     setLoading(true);
@@ -101,17 +175,30 @@ export default function LeadsPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    setCreateError(null);
+    const nextCategory = normalizeCustomCategory(
+      companyCategory === CUSTOM_CATEGORY_OPTION ? companyCustomCategory : companyCategory
+    );
+    if (companyCategory === CUSTOM_CATEGORY_OPTION && !nextCategory) {
+      setCreateError("Введи свою категорию или выбери готовую.");
+      return;
+    }
+    const finalCategory = nextCategory || "OTHER";
     await createLead({
       name,
       company,
-      companyCategory,
+      companyCategory: finalCategory,
       companySubcategory,
       phone,
       source: "админка"
     });
+    if (!knownCategoryValues.has(finalCategory.toUpperCase())) {
+      registerCustomCategory(finalCategory);
+    }
     setName("");
     setCompany("");
-    setCompanyCategory("OTHER");
+    setCompanyCategory("");
+    setCompanyCustomCategory("");
     setCompanySubcategory("");
     setPhone("");
     await load(1);
@@ -128,6 +215,7 @@ export default function LeadsPage() {
     setDetailsError(null);
     try {
       const data = await getLeadDetails(id);
+      registerCustomCategory(data.lead.companyCategory);
       setLeadForm({
         name: data.lead.name ?? "",
         company: data.lead.company ?? "",
@@ -138,6 +226,7 @@ export default function LeadsPage() {
         notes: data.notes ?? "",
         contacts: data.contacts?.length ? data.contacts : [emptyContact()]
       });
+      setModalCustomCategory("");
     } catch {
       setDetailsError("Не удалось загрузить карточку лида.");
       setLeadForm(null);
@@ -180,6 +269,7 @@ export default function LeadsPage() {
 
   async function saveLeadDetails() {
     if (!selectedLeadId || !leadForm) return;
+    const finalCategory = normalizeCustomCategory(leadForm.companyCategory || modalCustomCategory) || "OTHER";
 
     if (!leadForm.name.trim() || !leadForm.phone.trim()) {
       setDetailsError("Имя и телефон обязательны.");
@@ -192,7 +282,7 @@ export default function LeadsPage() {
       await updateLeadDetails(selectedLeadId, {
         name: leadForm.name,
         company: leadForm.company,
-        companyCategory: leadForm.companyCategory,
+        companyCategory: finalCategory,
         companySubcategory: leadForm.companySubcategory,
         phone: leadForm.phone,
         email: leadForm.email,
@@ -207,6 +297,7 @@ export default function LeadsPage() {
           notes: contact.notes
         }))
       });
+      registerCustomCategory(finalCategory);
       await load(page);
       await openLeadModal(selectedLeadId);
     } catch {
@@ -217,8 +308,32 @@ export default function LeadsPage() {
   }
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
-  const quickSubcategories = useMemo(() => companySubcategoryOptions(companyCategory), [companyCategory]);
-  const modalSubcategories = useMemo(() => companySubcategoryOptions(leadForm?.companyCategory || "OTHER"), [leadForm?.companyCategory]);
+  const categoryOptions = useMemo(
+    () => [...companyCategoryOptions, ...customCategories.map((item) => ({ value: item, label: item, subcategories: [] }))],
+    [customCategories]
+  );
+  const effectiveQuickCategory = useMemo(
+    () => normalizeCustomCategory(companyCategory === CUSTOM_CATEGORY_OPTION ? companyCustomCategory : companyCategory),
+    [companyCategory, companyCustomCategory]
+  );
+  const effectiveModalCategory = useMemo(
+    () => normalizeCustomCategory(leadForm?.companyCategory || modalCustomCategory),
+    [leadForm?.companyCategory, modalCustomCategory]
+  );
+  const quickSubcategories = useMemo(() => companySubcategoryOptions(effectiveQuickCategory), [effectiveQuickCategory]);
+  const modalSubcategories = useMemo(() => companySubcategoryOptions(effectiveModalCategory), [effectiveModalCategory]);
+
+  useEffect(() => {
+    const fromItems = items.map((item) => item.companyCategory);
+    if (!fromItems.length) return;
+    setCustomCategories((prev) => {
+      const next = mergeCustomCategories(prev, fromItems);
+      if (next.length !== prev.length && typeof window !== "undefined") {
+        window.localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [items, mergeCustomCategories]);
 
   return (
     <div>
@@ -233,24 +348,38 @@ export default function LeadsPage() {
             onChange={(e) => {
               const nextCategory = e.target.value;
               setCompanyCategory(nextCategory);
-              const available = companySubcategoryOptions(nextCategory);
+              if (nextCategory !== CUSTOM_CATEGORY_OPTION) {
+                setCompanyCustomCategory("");
+              }
+              const available = companySubcategoryOptions(
+                nextCategory === CUSTOM_CATEGORY_OPTION ? companyCustomCategory : nextCategory
+              );
               if (!available.some((item) => item.value === companySubcategory)) {
                 setCompanySubcategory("");
               }
             }}
           >
-            {companyCategoryOptions.map((item) => (
+            <option value="">Категория (например: Химическая промышленность)</option>
+            {categoryOptions.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
               </option>
             ))}
+            <option value={CUSTOM_CATEGORY_OPTION}>Своя категория…</option>
           </select>
+          {companyCategory === CUSTOM_CATEGORY_OPTION ? (
+            <input
+              placeholder="Введи свою категорию"
+              value={companyCustomCategory}
+              onChange={(e) => setCompanyCustomCategory(e.target.value)}
+            />
+          ) : null}
           <select
             value={companySubcategory}
             onChange={(e) => setCompanySubcategory(e.target.value)}
             disabled={!quickSubcategories.length}
           >
-            <option value="">Подкатегория (не выбрана)</option>
+            <option value="">{quickSubcategories.length ? "Подкатегория (не выбрана)" : "Сначала выбери категорию"}</option>
             {quickSubcategories.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -259,6 +388,10 @@ export default function LeadsPage() {
           </select>
           <input placeholder="Телефон" required value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
+        <p className="muted" style={{ marginBottom: 10 }}>
+          Примеры категорий: {categoryExamples}.
+        </p>
+        {createError ? <p className="bad" style={{ marginBottom: 10 }}>{createError}</p> : null}
         <button type="submit">Добавить</button>
       </form>
 
@@ -324,7 +457,7 @@ export default function LeadsPage() {
                 ))}
               </tbody>
             </table>
-            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+            <div className="pagination-controls">
               <button disabled={page <= 1} onClick={() => void load(page - 1)}>Назад</button>
               <span>Страница {page} / {totalPages}</span>
               <button disabled={page >= totalPages} onClick={() => void load(page + 1)}>Вперед</button>
@@ -361,21 +494,37 @@ export default function LeadsPage() {
                       value={leadForm.companyCategory}
                       onChange={(e) => {
                         const nextCategory = e.target.value;
+                        if (nextCategory === CUSTOM_CATEGORY_OPTION) {
+                          setLeadForm((prev) => prev ? { ...prev, companyCategory: "", companySubcategory: "" } : prev);
+                          return;
+                        }
                         setLeadForm((prev) => {
                           if (!prev) return prev;
                           const available = companySubcategoryOptions(nextCategory);
                           const nextSubcategory = available.some((item) => item.value === prev.companySubcategory) ? prev.companySubcategory : "";
                           return { ...prev, companyCategory: nextCategory, companySubcategory: nextSubcategory };
                         });
+                        setModalCustomCategory("");
                       }}
                     >
-                      {companyCategoryOptions.map((item) => (
+                      {categoryOptions.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
                         </option>
                       ))}
+                      <option value={CUSTOM_CATEGORY_OPTION}>Своя категория…</option>
                     </select>
                   </label>
+                  {!leadForm.companyCategory ? (
+                    <label>
+                      Своя категория
+                      <input
+                        placeholder="Например: Медицинские услуги"
+                        value={modalCustomCategory}
+                        onChange={(e) => setModalCustomCategory(e.target.value)}
+                      />
+                    </label>
+                  ) : null}
                   <label>
                     Подкатегория
                     <select
