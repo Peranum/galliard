@@ -1,12 +1,62 @@
+# Production landing
+
 galliard.by, www.galliard.by {
   encode zstd gzip
-
-  reverse_proxy frontend:3000
+  reverse_proxy landing:3000 {
+    lb_policy least_conn
+    health_uri /api/healthz
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+  }
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     X-Content-Type-Options "nosniff"
     X-Frame-Options "SAMEORIGIN"
     Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
+# Production admin
+admin.galliard.by {
+  encode zstd gzip
+  reverse_proxy admin-crm:3001 {
+    lb_policy least_conn
+    health_uri /api/healthz
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+  }
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
+# Local quick access: landing
+:8088 {
+  encode zstd gzip
+  reverse_proxy landing:3000 {
+    lb_policy least_conn
+    health_uri /api/healthz
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
+  }
+}
+
+# Local quick access: admin CRM
+:8089 {
+  encode zstd gzip
+  reverse_proxy admin-crm:3001 {
+    lb_policy least_conn
+    health_uri /api/healthz
+    health_interval 5s
+    health_timeout 2s
+    fail_duration 10s
   }
 }

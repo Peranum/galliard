@@ -156,9 +156,26 @@ export function ContactForm({ industries }: ContactFormProps) {
     setErrors({});
     setStatus("submitting");
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 850);
+    const response = await fetch("/api/lead", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: values.name.trim(),
+        company: values.company.trim(),
+        phone: values.phone.trim(),
+        message: `${values.request.trim()} | Отрасль: ${values.industry}`,
+        contactType: "call"
+      })
     });
+
+    if (!response.ok) {
+      const errorData = (await response.json().catch(() => null)) as { error?: string } | null;
+      setErrors({ form: errorData?.error ?? "Не удалось отправить заявку. Попробуйте позже." });
+      setStatus("error");
+      return;
+    }
 
     lastSubmitAt.current = Date.now();
     setStatus("success");

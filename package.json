@@ -1,28 +1,16 @@
 {
-  "name": "galliard-business-card",
-  "version": "0.1.0",
+  "name": "galliard-monorepo",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "lucide-react": "^0.577.0",
-    "next": "15.2.3",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "3.3.0",
-    "@types/node": "22.13.9",
-    "@types/react": "19.0.10",
-    "@types/react-dom": "19.0.4",
-    "eslint": "9.21.0",
-    "eslint-config-next": "15.2.3",
-    "sass": "1.85.1",
-    "typescript": "5.8.2"
+    "dev:landing": "npm run dev -w @galliard/landing",
+    "dev:admin": "npm run dev -w @galliard/admin-crm",
+    "build:landing": "npm run build -w @galliard/landing",
+    "build:admin": "npm run build -w @galliard/admin-crm",
+    "lint": "npm run lint -w @galliard/landing && npm run lint -w @galliard/admin-crm",
+    "typecheck": "npm run typecheck -w @galliard/landing && npm run typecheck -w @galliard/admin-crm"
   }
 }

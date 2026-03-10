@@ -1,31 +1,145 @@
+name: galliard
+
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: galliard-frontend:latest
-    container_name: galliard-frontend
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
-    expose:
-      - "3000"
+    init: true
+    stop_grace_period: 30s
     environment:
+      POSTGRES_DB: ${POSTGRES_DB:-galliard}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-galliard}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    image: galliard-backend:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-galliard}?sslmode=disable
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-dev-admin-token}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+  mailer:
+    build:
+      context: ./services/mailer
+      dockerfile: Dockerfile
+    image: galliard-mailer:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-galliard}?sslmode=disable
+      SMTP_HOST: ${SMTP_HOST:-mail.yourdomain.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@yourdomain.com}
+
+  landing:
+    build:
+      context: ./apps/landing
+      dockerfile: Dockerfile
+    image: galliard-landing:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8080
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  admin-crm:
+    build:
+      context: ./apps/admin-crm
+      dockerfile: Dockerfile
+    image: galliard-admin-crm:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8080
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-dev-admin-token}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-dev-session-secret}
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/api/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
   caddy:
     image: caddy:2-alpine
-    container_name: galliard-caddy
     restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
     depends_on:
-      - frontend
+      landing:
+        condition: service_healthy
+      admin-crm:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
+      - "8088:8088"
+      - "8089:8089"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
+  postgres_data:
+    name: galliard_postgres_data
   caddy_data:
+    name: galliard_caddy_data
   caddy_config:
+    name: galliard_caddy_config
+
+networks:
+  default:
+    name: galliard_network
