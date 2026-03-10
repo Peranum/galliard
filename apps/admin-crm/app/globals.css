@@ -128,11 +128,13 @@ li + li {
   display: grid;
   grid-template-columns: 280px 1fr;
   min-height: 100vh;
+  overflow: visible;
 }
 
 .sidebar {
   position: sticky;
   top: 0;
+  z-index: 40;
   min-height: 100vh;
   padding: 22px;
   color: var(--text-invert);
@@ -167,6 +169,7 @@ li + li {
 .sidebar nav {
   display: grid;
   gap: 8px;
+  overflow: visible;
 }
 
 .sidebar .nav-toggle {
