@@ -73,6 +73,7 @@ type lead struct {
 	Priority           string     `json:"priority"`
 	Owner              string     `json:"owner"`
 	PotentialValue     float64    `json:"potentialValue"`
+	StageEnteredAt     *time.Time `json:"stageEnteredAt,omitempty"`
 	LastActivityAt     *time.Time `json:"lastActivityAt,omitempty"`
 	NextActionAt       *time.Time `json:"nextActionAt,omitempty"`
 	CreatedAt          time.Time  `json:"createdAt"`
@@ -86,6 +87,13 @@ type leadContact struct {
 	Phone      string `json:"phone"`
 	Email      string `json:"email"`
 	Notes      string `json:"notes"`
+}
+
+type leadStageHistoryItem struct {
+	FromStage *string   `json:"fromStage,omitempty"`
+	ToStage   string    `json:"toStage"`
+	ChangedBy string    `json:"changedBy"`
+	ChangedAt time.Time `json:"changedAt"`
 }
 
 type task struct {
@@ -388,9 +396,20 @@ func (a *app) handleListLeads(w http.ResponseWriter, r *http.Request) {
 	args = append(args, pageSize, offset)
 
 	sqlText := fmt.Sprintf(`
-		SELECT id, name, COALESCE(company, ''), COALESCE(company_category, 'OTHER'), COALESCE(company_subcategory, ''), phone, COALESCE(email, ''), source, stage, priority, owner_name,
-		COALESCE(potential_value, 0), last_activity_at, next_action_at, created_at
-		FROM leads
+		SELECT l.id, l.name, COALESCE(l.company, ''), COALESCE(l.company_category, 'OTHER'), COALESCE(l.company_subcategory, ''), l.phone, COALESCE(l.email, ''), l.source, l.stage, l.priority, l.owner_name,
+		COALESCE(l.potential_value, 0),
+		COALESCE(
+		  (
+		    SELECT h.changed_at
+		    FROM lead_stage_history h
+		    WHERE h.lead_id = l.id AND h.to_stage = l.stage
+		    ORDER BY h.changed_at DESC
+		    LIMIT 1
+		  ),
+		  l.created_at
+		) AS stage_entered_at,
+		l.last_activity_at, l.next_action_at, l.created_at
+		FROM leads l
 		WHERE %s
 		ORDER BY %s %s
 		LIMIT $%d OFFSET $%d
@@ -407,7 +426,7 @@ func (a *app) handleListLeads(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l lead
 		var email string
-		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.StageEnteredAt, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "scan lead"})
 			return
 		}
@@ -465,11 +484,22 @@ func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 	var email string
 	var notes sql.NullString
 	err := a.db.QueryRow(ctx, `
-		SELECT id, name, COALESCE(company, ''), COALESCE(company_category, 'OTHER'), COALESCE(company_subcategory, ''), phone, COALESCE(email, ''), source, stage, priority, owner_name,
-		       COALESCE(potential_value, 0), COALESCE(message, ''), last_activity_at, next_action_at, created_at
-		FROM leads
-		WHERE id = $1
-	`, id).Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &notes, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt)
+		SELECT l.id, l.name, COALESCE(l.company, ''), COALESCE(l.company_category, 'OTHER'), COALESCE(l.company_subcategory, ''), l.phone, COALESCE(l.email, ''), l.source, l.stage, l.priority, l.owner_name,
+		       COALESCE(l.potential_value, 0), COALESCE(l.message, ''),
+		       COALESCE(
+		         (
+		           SELECT h.changed_at
+		           FROM lead_stage_history h
+		           WHERE h.lead_id = l.id AND h.to_stage = l.stage
+		           ORDER BY h.changed_at DESC
+		           LIMIT 1
+		         ),
+		         l.created_at
+		       ) AS stage_entered_at,
+		       l.last_activity_at, l.next_action_at, l.created_at
+		FROM leads l
+		WHERE l.id = $1
+	`, id).Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &notes, &l.StageEnteredAt, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "lead not found"})
 		return
@@ -498,10 +528,31 @@ func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	historyRows, err := a.db.Query(ctx, `
+		SELECT from_stage, to_stage, COALESCE(changed_by, ''), changed_at
+		FROM lead_stage_history
+		WHERE lead_id = $1
+		ORDER BY changed_at ASC
+	`, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "history query"})
+		return
+	}
+	defer historyRows.Close()
+
+	stageHistory := []leadStageHistoryItem{}
+	for historyRows.Next() {
+		var item leadStageHistoryItem
+		if scanErr := historyRows.Scan(&item.FromStage, &item.ToStage, &item.ChangedBy, &item.ChangedAt); scanErr == nil {
+			stageHistory = append(stageHistory, item)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"lead":     l,
-		"notes":    notes.String,
-		"contacts": contacts,
+		"lead":         l,
+		"notes":        notes.String,
+		"contacts":     contacts,
+		"stageHistory": stageHistory,
 	})
 }
 
@@ -898,7 +949,9 @@ func (a *app) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		c.Leads = append(c.Leads, l)
 
 		entered := l.CreatedAt
-		_ = a.db.QueryRow(ctx, `SELECT changed_at FROM lead_stage_history WHERE lead_id = $1 AND to_stage = $2 ORDER BY changed_at DESC LIMIT 1`, l.ID, l.Stage).Scan(&entered)
+		if l.StageEnteredAt != nil {
+			entered = *l.StageEnteredAt
+		}
 		c.AvgHoursOnStage += now.Sub(entered).Hours()
 	}
 
@@ -935,11 +988,22 @@ func (a *app) handlePipeline(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleClients(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rows, err := a.db.Query(ctx, `
-		SELECT id, name, COALESCE(company,''), COALESCE(company_category, 'OTHER'), COALESCE(company_subcategory, ''), phone, COALESCE(email,''), source, stage, priority, owner_name,
-		COALESCE(potential_value, 0), last_activity_at, next_action_at, created_at
-		FROM leads
-		WHERE stage IN ('SOURCING','PROPOSAL','NEGOTIATION','WON')
-		ORDER BY updated_at DESC
+		SELECT l.id, l.name, COALESCE(l.company,''), COALESCE(l.company_category, 'OTHER'), COALESCE(l.company_subcategory, ''), l.phone, COALESCE(l.email,''), l.source, l.stage, l.priority, l.owner_name,
+		COALESCE(l.potential_value, 0),
+		COALESCE(
+		  (
+		    SELECT h.changed_at
+		    FROM lead_stage_history h
+		    WHERE h.lead_id = l.id AND h.to_stage = l.stage
+		    ORDER BY h.changed_at DESC
+		    LIMIT 1
+		  ),
+		  l.created_at
+		) AS stage_entered_at,
+		l.last_activity_at, l.next_action_at, l.created_at
+		FROM leads l
+		WHERE l.stage IN ('SOURCING','PROPOSAL','NEGOTIATION','WON')
+		ORDER BY l.updated_at DESC
 	`)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "clients query"})
@@ -951,7 +1015,7 @@ func (a *app) handleClients(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l lead
 		var email string
-		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err == nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.StageEnteredAt, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err == nil {
 			if email != "" {
 				l.Email = email
 			}
@@ -963,16 +1027,27 @@ func (a *app) handleClients(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) fetchLeads(ctx context.Context, stage string) ([]lead, error) {
 	query := `
-		SELECT id, name, COALESCE(company,''), COALESCE(company_category, 'OTHER'), COALESCE(company_subcategory, ''), phone, COALESCE(email,''), source, stage, priority, owner_name,
-		COALESCE(potential_value, 0), last_activity_at, next_action_at, created_at
-		FROM leads
+		SELECT l.id, l.name, COALESCE(l.company,''), COALESCE(l.company_category, 'OTHER'), COALESCE(l.company_subcategory, ''), l.phone, COALESCE(l.email,''), l.source, l.stage, l.priority, l.owner_name,
+		COALESCE(l.potential_value, 0),
+		COALESCE(
+		  (
+		    SELECT h.changed_at
+		    FROM lead_stage_history h
+		    WHERE h.lead_id = l.id AND h.to_stage = l.stage
+		    ORDER BY h.changed_at DESC
+		    LIMIT 1
+		  ),
+		  l.created_at
+		) AS stage_entered_at,
+		l.last_activity_at, l.next_action_at, l.created_at
+		FROM leads l
 	`
 	args := []any{}
 	if stage != "" {
-		query += " WHERE stage = $1"
+		query += " WHERE l.stage = $1"
 		args = append(args, stage)
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY l.created_at DESC"
 	rows, err := a.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -983,7 +1058,7 @@ func (a *app) fetchLeads(ctx context.Context, stage string) ([]lead, error) {
 	for rows.Next() {
 		var l lead
 		var email string
-		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Company, &l.CompanyCategory, &l.CompanySubcategory, &l.Phone, &email, &l.Source, &l.Stage, &l.Priority, &l.Owner, &l.PotentialValue, &l.StageEnteredAt, &l.LastActivityAt, &l.NextActionAt, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		if email != "" {

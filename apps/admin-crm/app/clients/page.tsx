@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Lead, LeadContact, LeadStage } from "@/types/crm";
+import type { Lead, LeadContact, LeadStage, LeadStageHistoryEntry } from "@/types/crm";
 import { getClients, getLeadDetails, updateLead, updateLeadDetails, updateLeadStage } from "@/lib/api";
 import { leadStageLabel } from "@/lib/labels";
+import { buildLeadStageTimeline, formatDuration } from "@/lib/stage-metrics";
 
 const stageOptions: LeadStage[] = [
   "NEW",
@@ -28,6 +29,7 @@ type ClientEditorState = {
   initialStage: LeadStage;
   initialNextActionAt: string;
   initialNotes: string;
+  stageHistory: LeadStageHistoryEntry[];
 };
 
 function toDateTimeLocal(value?: string): string {
@@ -83,7 +85,8 @@ export default function ClientsPage() {
         newComment: "",
         initialStage: data.lead.stage,
         initialNextActionAt: nextActionAt,
-        initialNotes: data.notes ?? ""
+        initialNotes: data.notes ?? "",
+        stageHistory: data.stageHistory ?? []
       });
     } catch {
       setError("Не удалось открыть карточку клиента.");
@@ -170,6 +173,10 @@ export default function ClientsPage() {
       .filter(Boolean),
     [editor?.notes]
   );
+  const stageTimeline = useMemo(() => {
+    if (!editor) return [];
+    return buildLeadStageTimeline(editor.lead, editor.stageHistory);
+  }, [editor]);
 
   return (
     <div>
@@ -217,6 +224,31 @@ export default function ClientsPage() {
             {error ? <p className="bad">{error}</p> : null}
 
             <div className="modal-content">
+              {stageTimeline.length ? (
+                <section className="card stage-timeline-card">
+                  <h4>Движение по этапам</h4>
+                  <div className="stage-timeline-line">
+                    {stageTimeline.map((segment, index) => (
+                      <div
+                        key={`${segment.stage}-${segment.startAt}-${index}`}
+                        className={`stage-timeline-segment ${segment.health}`}
+                        style={{ backgroundColor: segment.color, flexGrow: Math.max(1, segment.hours) }}
+                        title={`${leadStageLabel(segment.stage)} · ${formatDuration(segment.hours)}`}
+                      >
+                        <span className="stage-timeline-duration">{formatDuration(segment.hours)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="stage-timeline-labels">
+                    {stageTimeline.map((segment, index) => (
+                      <span key={`${segment.stage}-label-${index}`} className={segment.isCurrent ? "current" : ""}>
+                        {leadStageLabel(segment.stage)}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               <div className="grid two">
                 <label>
                   Компания

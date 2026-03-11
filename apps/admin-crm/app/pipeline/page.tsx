@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getPipeline, updateLeadStage } from "@/lib/api";
 import type { Lead, LeadStage } from "@/types/crm";
 import { leadStageLabel } from "@/lib/labels";
+import { stageSlaHours } from "@/lib/stage-metrics";
 
 const stages: LeadStage[] = [
   "NEW",
@@ -130,6 +131,17 @@ export default function PipelinePage() {
               <h3>{leadStageLabel(stage)}</h3>
               <p>Количество: {column?.count ?? 0}</p>
               <p>Среднее время (ч): {Math.round(column?.avgHoursOnStage ?? 0)}</p>
+              {(() => {
+                const avg = Math.round(column?.avgHoursOnStage ?? 0);
+                const sla = stageSlaHours[stage];
+                if (stage === "WON" || stage === "LOST") return null;
+                if (avg < sla) return null;
+                return (
+                  <p className={avg >= sla * 1.7 ? "bad" : "muted"}>
+                    Подвисание: {avg} ч при SLA {sla} ч
+                  </p>
+                );
+              })()}
               <div className="stack">
                 {column?.leads.map((lead) => (
                   <article

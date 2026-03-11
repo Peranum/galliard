@@ -639,6 +639,117 @@ li + li {
   color: var(--danger);
 }
 
+.stalled-leads-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.stalled-leads-list li {
+  line-height: 1.4;
+}
+
+.stage-health-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid #d4e2f4;
+  background: #edf5ff;
+  color: #23456f;
+  white-space: nowrap;
+}
+
+.stage-health-badge.warn {
+  background: #fff6e8;
+  border-color: #f3d5a6;
+  color: #8f5600;
+}
+
+.stage-health-badge.critical {
+  background: #fff0f1;
+  border-color: #f3b8be;
+  color: #b13142;
+}
+
+.stage-health-badge.terminal {
+  background: #edf5ff;
+  border-color: #d4e2f4;
+  color: #23456f;
+}
+
+.stage-timeline-card {
+  border: 1px solid #d5e3f7;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
+}
+
+.stage-timeline-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin-top: 30px;
+  min-height: 18px;
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.stage-timeline-segment {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  min-width: 18px;
+}
+
+.stage-timeline-segment.warn {
+  box-shadow: 0 0 0 2px rgba(236, 156, 25, 0.32);
+}
+
+.stage-timeline-segment.critical {
+  box-shadow: 0 0 0 2px rgba(209, 71, 90, 0.36);
+}
+
+.stage-timeline-duration {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  color: #304767;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d3e0f2;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.stage-timeline-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.stage-timeline-labels span {
+  border: 1px solid #d0dff3;
+  background: #f4f9ff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  color: #2f4b6d;
+}
+
+.stage-timeline-labels span.current {
+  border-color: #8eb5f0;
+  background: #e8f2ff;
+  color: #194680;
+  font-weight: 600;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -922,6 +1033,15 @@ button + button {
 
   .modal-actions {
     flex-direction: column-reverse;
+  }
+
+  .stage-timeline-line {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .stage-timeline-duration {
+    font-size: 0.68rem;
   }
 
   input,

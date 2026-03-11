@@ -22,9 +22,17 @@ export interface Lead {
   priority: "LOW" | "MEDIUM" | "HIGH";
   owner: string;
   potentialValue: number;
+  stageEnteredAt?: string;
   lastActivityAt?: string;
   nextActionAt?: string;
   createdAt: string;
+}
+
+export interface LeadStageHistoryEntry {
+  fromStage?: LeadStage;
+  toStage: LeadStage;
+  changedBy: string;
+  changedAt: string;
 }
 
 export interface LeadContact {
@@ -41,6 +49,7 @@ export interface LeadDetails {
   lead: Lead;
   notes: string;
   contacts: LeadContact[];
+  stageHistory: LeadStageHistoryEntry[];
 }
 
 export interface Task {

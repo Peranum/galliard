@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { Lead, LeadContact } from "@/types/crm";
+import type { Lead, LeadContact, LeadStageHistoryEntry } from "@/types/crm";
 import { createLead, getLeadDetails, getLeads, updateLeadDetails, updateLeadStage } from "@/lib/api";
 import { leadStageLabel } from "@/lib/labels";
 import {
@@ -10,6 +10,7 @@ import {
   companySubcategoryLabel,
   companySubcategoryOptions
 } from "@/lib/company-categories";
+import { buildLeadStageTimeline, formatDuration, getLeadCurrentStageHours, stageHealth, stageSlaHours } from "@/lib/stage-metrics";
 
 const stageOptions = ["", "NEW", "CONTACTED", "REPLIED", "QUALIFIED", "SOURCING", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
 const stageValues = stageOptions.filter((stage): stage is Exclude<(typeof stageOptions)[number], ""> => Boolean(stage));
@@ -87,6 +88,8 @@ export default function LeadsPage() {
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [leadForm, setLeadForm] = useState<LeadFormState | null>(null);
+  const [leadMeta, setLeadMeta] = useState<Lead | null>(null);
+  const [leadStageHistory, setLeadStageHistory] = useState<LeadStageHistoryEntry[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsSaving, setDetailsSaving] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -216,6 +219,8 @@ export default function LeadsPage() {
     try {
       const data = await getLeadDetails(id);
       registerCustomCategory(data.lead.companyCategory);
+      setLeadMeta(data.lead);
+      setLeadStageHistory(data.stageHistory ?? []);
       setLeadForm({
         name: data.lead.name ?? "",
         company: data.lead.company ?? "",
@@ -238,6 +243,8 @@ export default function LeadsPage() {
   function closeLeadModal() {
     setSelectedLeadId(null);
     setLeadForm(null);
+    setLeadMeta(null);
+    setLeadStageHistory([]);
     setDetailsError(null);
     setDetailsLoading(false);
     setDetailsSaving(false);
@@ -322,6 +329,22 @@ export default function LeadsPage() {
   );
   const quickSubcategories = useMemo(() => companySubcategoryOptions(effectiveQuickCategory), [effectiveQuickCategory]);
   const modalSubcategories = useMemo(() => companySubcategoryOptions(effectiveModalCategory), [effectiveModalCategory]);
+  const stageTimeline = useMemo(() => {
+    if (!leadMeta) return [];
+    return buildLeadStageTimeline(leadMeta, leadStageHistory);
+  }, [leadMeta, leadStageHistory]);
+  const stalledLeads = useMemo(() => {
+    const now = new Date();
+    return items
+      .map((item) => {
+        const hours = getLeadCurrentStageHours(item, now);
+        const health = stageHealth(item.stage, hours);
+        return { lead: item, hours, health, slaHours: stageSlaHours[item.stage] };
+      })
+      .filter((item) => item.health === "warn" || item.health === "critical")
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 8);
+  }, [items]);
 
   useEffect(() => {
     const fromItems = items.map((item) => item.companyCategory);
@@ -419,6 +442,24 @@ export default function LeadsPage() {
         </div>
       </section>
 
+      <section className="card" style={{ marginBottom: 12 }}>
+        <h3>Где подвисает процесс</h3>
+        {stalledLeads.length ? (
+          <ul className="stalled-leads-list">
+            {stalledLeads.map((item) => (
+              <li key={item.lead.id}>
+                <strong>{item.lead.company || item.lead.name}</strong> · {leadStageLabel(item.lead.stage)} · {formatDuration(item.hours)}
+                <span className={`stage-health-badge ${item.health === "critical" ? "critical" : "warn"}`}>
+                  SLA {item.slaHours} ч
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">На текущей странице нет лидов, которые превышают SLA этапа.</p>
+        )}
+      </section>
+
       <section className="card">
         {loading ? (
           <p>Загрузка...</p>
@@ -431,6 +472,7 @@ export default function LeadsPage() {
                   <th>Компания</th>
                   <th>Категория</th>
                   <th>Этап</th>
+                  <th>На этапе</th>
                   <th>Быстро сменить этап</th>
                   <th>Последняя активность</th>
                 </tr>
@@ -445,6 +487,17 @@ export default function LeadsPage() {
                       {lead.companySubcategory ? ` / ${companySubcategoryLabel(lead.companyCategory, lead.companySubcategory)}` : ""}
                     </td>
                     <td>{leadStageLabel(lead.stage)}</td>
+                    <td>
+                      {(() => {
+                        const hours = getLeadCurrentStageHours(lead);
+                        const health = stageHealth(lead.stage, hours);
+                        return (
+                          <span className={`stage-health-badge ${health}`}>
+                            {formatDuration(hours)}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       <select value={lead.stage} onChange={(e) => void onStageChange(lead.id, e.target.value as Lead["stage"])}>
                         {stageValues.map((stage) => (
@@ -479,6 +532,31 @@ export default function LeadsPage() {
 
             {leadForm ? (
               <div className="modal-content">
+                {stageTimeline.length ? (
+                  <section className="card stage-timeline-card">
+                    <h4>Движение по этапам</h4>
+                    <div className="stage-timeline-line">
+                      {stageTimeline.map((segment, index) => (
+                        <div
+                          key={`${segment.stage}-${segment.startAt}-${index}`}
+                          className={`stage-timeline-segment ${segment.health}`}
+                          style={{ backgroundColor: segment.color, flexGrow: Math.max(1, segment.hours) }}
+                          title={`${leadStageLabel(segment.stage)} · ${formatDuration(segment.hours)}`}
+                        >
+                          <span className="stage-timeline-duration">{formatDuration(segment.hours)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="stage-timeline-labels">
+                      {stageTimeline.map((segment, index) => (
+                        <span key={`${segment.stage}-label-${index}`} className={segment.isCurrent ? "current" : ""}>
+                          {leadStageLabel(segment.stage)}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
                 <div className="grid two">
                   <label>
                     Имя
