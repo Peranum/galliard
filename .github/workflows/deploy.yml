@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server over SSH (password)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          DEPLOY_PATH: /root/galliard
+          BRANCH: main
+        run: |
+          set -Eeuo pipefail
+
+          : "${SSH_HOST:?SSH_HOST is required}"
+          : "${SSH_PORT:?SSH_PORT is required}"
+          : "${SSH_USER:?SSH_USER is required}"
+          : "${SSH_PASSWORD:?SSH_PASSWORD is required}"
+
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+          sshpass -p "$SSH_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" <<EOF
+          set -Eeuo pipefail
+
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+
+          docker compose -f docker-compose.yml -p galliard up -d --build backend admin-crm landing caddy
+          docker compose -f docker-compose.yml -p galliard ps
+          EOF
