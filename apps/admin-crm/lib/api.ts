@@ -223,6 +223,7 @@ export function createTask(payload: {
   assignee?: string;
   dueAt?: string;
   status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
+  priority?: "LOW" | "MEDIUM" | "HIGH";
 }) {
   return request<{ id: string }>("/tasks", {
     method: "POST",
@@ -234,6 +235,7 @@ export function patchTask(id: string, payload: {
   title?: string;
   description?: string;
   status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
+  priority?: "LOW" | "MEDIUM" | "HIGH";
   dueAt?: string;
   type?: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
   referenceType?: "WORK" | "LEAD" | "CLIENT";

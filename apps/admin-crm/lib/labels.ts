@@ -42,6 +42,16 @@ export function taskStatusLabel(status: Task["status"]): string {
   return taskStatusLabels[status] ?? status;
 }
 
+const taskPriorityLabels: Record<Task["priority"], string> = {
+  LOW: "Низкий",
+  MEDIUM: "Средний",
+  HIGH: "Высокий"
+};
+
+export function taskPriorityLabel(priority: Task["priority"]): string {
+  return taskPriorityLabels[priority] ?? priority;
+}
+
 export function campaignStatusLabel(status: string): string {
   const value = status.toLowerCase();
   if (value === "draft") return "Черновик";

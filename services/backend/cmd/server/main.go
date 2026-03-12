@@ -42,6 +42,11 @@ var taskReferenceTypes = map[string]struct{}{
 	"LEAD":   {},
 	"CLIENT": {},
 }
+var taskPrioritySet = map[string]struct{}{
+	"LOW":    {},
+	"MEDIUM": {},
+	"HIGH":   {},
+}
 var allowedCompanyCategories = map[string]struct{}{
 	"CHEMICALS":              {},
 	"TEXTILE":                {},
@@ -116,6 +121,7 @@ type task struct {
 	Description   string     `json:"description,omitempty"`
 	Type          string     `json:"type"`
 	Status        string     `json:"status"`
+	Priority      string     `json:"priority"`
 	DueAt         *time.Time `json:"dueAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
@@ -315,8 +321,8 @@ func (a *app) handlePublicCreateLead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, assignee, due_at, created_at, updated_at)
-		VALUES ($1,$2,'LEAD',$2,$3,$4,'FOLLOW_UP','READY','owner',$5,$6,$6)
+		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, priority, assignee, due_at, created_at, updated_at)
+		VALUES ($1,$2,'LEAD',$2,$3,$4,'FOLLOW_UP','READY','HIGH','owner',$5,$6,$6)
 	`, taskID, leadID, "Связаться с новым лидом", "Первичный контакт с новым лидом из формы сайта.", due, now)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "insert task"})
@@ -601,7 +607,7 @@ func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskRows, err := a.db.Query(ctx, `
-		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at
+		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, COALESCE(priority, 'MEDIUM'), due_at, created_at
 		FROM tasks
 		WHERE (reference_type IN ('LEAD','CLIENT') AND reference_id = $1)
 		   OR lead_id = $1
@@ -626,7 +632,7 @@ func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 	tasks := []task{}
 	for taskRows.Next() {
 		var t task
-		if scanErr := taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt); scanErr == nil {
+		if scanErr := taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.Priority, &t.DueAt, &t.CreatedAt); scanErr == nil {
 			tasks = append(tasks, t)
 		}
 	}
@@ -919,17 +925,26 @@ func (a *app) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	criticalTasks := []task{}
 	taskRows, err := a.db.Query(ctx, `
-		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at
+		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, COALESCE(priority, 'MEDIUM'), due_at, created_at
 		FROM tasks
 		WHERE status <> 'DONE'
-		ORDER BY CASE WHEN due_at IS NOT NULL AND due_at < NOW() THEN 0 ELSE 1 END, due_at NULLS LAST, created_at DESC
+		ORDER BY
+			CASE COALESCE(priority, 'MEDIUM')
+				WHEN 'HIGH' THEN 0
+				WHEN 'MEDIUM' THEN 1
+				WHEN 'LOW' THEN 2
+				ELSE 3
+			END,
+			CASE WHEN due_at IS NOT NULL AND due_at < NOW() THEN 0 ELSE 1 END,
+			due_at NULLS LAST,
+			created_at DESC
 		LIMIT 10
 	`)
 	if err == nil {
 		defer taskRows.Close()
 		for taskRows.Next() {
 			var t task
-			if taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt) == nil {
+			if taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.Priority, &t.DueAt, &t.CreatedAt) == nil {
 				criticalTasks = append(criticalTasks, t)
 			}
 		}
@@ -1159,7 +1174,7 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	referenceType := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("referenceType")))
 	referenceID := strings.TrimSpace(r.URL.Query().Get("referenceId"))
 
-	query := `SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at FROM tasks`
+	query := `SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, COALESCE(priority, 'MEDIUM'), due_at, created_at FROM tasks`
 	conditions := []string{}
 	args := []any{}
 	argIdx := 1
@@ -1192,6 +1207,12 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 			WHEN 'DONE' THEN 5
 			ELSE 99
 		END,
+		CASE COALESCE(priority, 'MEDIUM')
+			WHEN 'HIGH' THEN 0
+			WHEN 'MEDIUM' THEN 1
+			WHEN 'LOW' THEN 2
+			ELSE 3
+		END,
 		due_at NULLS LAST,
 		created_at DESC
 		LIMIT 500`
@@ -1206,7 +1227,7 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	items := []task{}
 	for rows.Next() {
 		var t task
-		if err := rows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt); err == nil {
+		if err := rows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.Priority, &t.DueAt, &t.CreatedAt); err == nil {
 			items = append(items, t)
 		}
 	}
@@ -1224,6 +1245,7 @@ func (a *app) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Description   string     `json:"description"`
 		Type          string     `json:"type"`
 		Status        string     `json:"status"`
+		Priority      string     `json:"priority"`
 		Assignee      string     `json:"assignee"`
 		DueAt         *time.Time `json:"dueAt"`
 	}
@@ -1264,14 +1286,22 @@ func (a *app) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid task status"})
 		return
 	}
+	body.Priority = strings.ToUpper(strings.TrimSpace(body.Priority))
+	if body.Priority == "" {
+		body.Priority = "MEDIUM"
+	}
+	if _, ok := taskPrioritySet[body.Priority]; !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid task priority"})
+		return
+	}
 	if body.Assignee == "" {
 		body.Assignee = "owner"
 	}
 	id := uuid.NewString()
 	_, err := a.db.Exec(ctx, `
-		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, assignee, due_at, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
-	`, id, body.LeadID, body.ReferenceType, nullIfEmpty(nonEmptyPtrValue(body.ReferenceID)), strings.TrimSpace(body.Title), nullIfEmpty(strings.TrimSpace(body.Description)), body.Type, body.Status, body.Assignee, body.DueAt)
+		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, priority, assignee, due_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+	`, id, body.LeadID, body.ReferenceType, nullIfEmpty(nonEmptyPtrValue(body.ReferenceID)), strings.TrimSpace(body.Title), nullIfEmpty(strings.TrimSpace(body.Description)), body.Type, body.Status, body.Priority, body.Assignee, body.DueAt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create task"})
 		return
@@ -1287,6 +1317,7 @@ func (a *app) handlePatchTask(w http.ResponseWriter, r *http.Request) {
 		Description   *string    `json:"description"`
 		Type          *string    `json:"type"`
 		Status        *string    `json:"status"`
+		Priority      *string    `json:"priority"`
 		DueAt         *time.Time `json:"dueAt"`
 		ReferenceType *string    `json:"referenceType"`
 		ReferenceID   *string    `json:"referenceId"`
@@ -1326,6 +1357,14 @@ func (a *app) handlePatchTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.Priority != nil {
+		priority := strings.ToUpper(strings.TrimSpace(*body.Priority))
+		if _, ok := taskPrioritySet[priority]; !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid task priority"})
+			return
+		}
+		body.Priority = &priority
+	}
 
 	var normalizedReferenceID any
 	if body.ReferenceID != nil {
@@ -1341,9 +1380,10 @@ func (a *app) handlePatchTask(w http.ResponseWriter, r *http.Request) {
 			type = COALESCE($6, type),
 			reference_type = COALESCE($7, reference_type),
 			reference_id = COALESCE($8, reference_id),
+			priority = COALESCE($9, priority),
 			updated_at = NOW()
 		WHERE id = $1
-	`, id, body.Title, body.Status, body.DueAt, body.Description, body.Type, body.ReferenceType, normalizedReferenceID)
+	`, id, body.Title, body.Status, body.DueAt, body.Description, body.Type, body.ReferenceType, normalizedReferenceID, body.Priority)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "patch task"})
 		return

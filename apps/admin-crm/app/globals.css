@@ -990,6 +990,35 @@ button + button {
   color: #496183;
 }
 
+.task-priority-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.task-priority-badge.high {
+  color: #7b0c19;
+  border-color: #f1b4bc;
+  background: #ffe8eb;
+}
+
+.task-priority-badge.medium {
+  color: #7b4a00;
+  border-color: #f3d49a;
+  background: #fff4dc;
+}
+
+.task-priority-badge.low {
+  color: #1b4b14;
+  border-color: #b9e0b3;
+  background: #ebfae8;
+}
+
 .task-card p {
   margin: 2px 0;
   color: #2c3f60;

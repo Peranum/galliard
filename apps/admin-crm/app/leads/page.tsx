@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Lead, LeadContact, LeadStageHistoryEntry, Task } from "@/types/crm";
 import { createLead, deleteLead, getLeadDetails, getLeads, updateLeadDetails, updateLeadStage } from "@/lib/api";
-import { leadStageLabel, taskStatusLabel } from "@/lib/labels";
+import { leadStageLabel, taskPriorityLabel, taskStatusLabel } from "@/lib/labels";
 import {
   companyCategoryLabel,
   companyCategoryOptions,
@@ -601,6 +601,7 @@ export default function LeadsPage() {
                                 {tasksByStatus.map((task) => (
                                   <li key={task.id}>
                                     <strong>{task.title}</strong>
+                                    {` · приоритет: ${taskPriorityLabel(task.priority).toLowerCase()}`}
                                     {task.dueAt ? ` · срок: ${new Date(task.dueAt).toLocaleString()}` : ""}
                                   </li>
                                 ))}

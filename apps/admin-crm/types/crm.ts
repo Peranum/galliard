@@ -61,6 +61,7 @@ export interface Task {
   description?: string;
   type: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
   status: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
+  priority: "LOW" | "MEDIUM" | "HIGH";
   dueAt?: string;
   createdAt: string;
 }

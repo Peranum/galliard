@@ -3,7 +3,7 @@
 import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import type { Lead, Task } from "@/types/crm";
 import { createTask, deleteTask, getClients, getLeads, getTasks, patchTask } from "@/lib/api";
-import { taskStatusLabel, taskTypeLabel } from "@/lib/labels";
+import { taskPriorityLabel, taskStatusLabel, taskTypeLabel } from "@/lib/labels";
 
 const kanbanStatuses: Task["status"][] = ["PLANNED", "READY", "IN_PROGRESS", "REVIEW", "DONE"];
 
@@ -15,6 +15,7 @@ type TaskFormState = {
   description: string;
   type: TaskType;
   status: Task["status"];
+  priority: Task["priority"];
   dueAt: string;
   referenceType: TaskReferenceType;
   referenceId: string;
@@ -25,6 +26,7 @@ const initialFormState: TaskFormState = {
   description: "",
   type: "FOLLOW_UP",
   status: "PLANNED",
+  priority: "MEDIUM",
   dueAt: "",
   referenceType: "WORK",
   referenceId: ""
@@ -122,6 +124,7 @@ export default function TasksPage() {
         description: createForm.description.trim() || undefined,
         type: createForm.type,
         status: createForm.status,
+        priority: createForm.priority,
         dueAt: createForm.dueAt ? new Date(createForm.dueAt).toISOString() : undefined,
         referenceType: createForm.referenceType,
         referenceId: createForm.referenceType === "WORK" ? undefined : createForm.referenceId || undefined,
@@ -143,6 +146,7 @@ export default function TasksPage() {
       description: task.description ?? "",
       type: task.type,
       status: task.status,
+      priority: task.priority,
       dueAt: toDatetimeLocal(task.dueAt),
       referenceType: task.referenceType,
       referenceId: task.referenceId ?? ""
@@ -159,6 +163,7 @@ export default function TasksPage() {
         description: editForm.description.trim() || undefined,
         type: editForm.type,
         status: editForm.status,
+        priority: editForm.priority,
         dueAt: editForm.dueAt ? new Date(editForm.dueAt).toISOString() : undefined,
         referenceType: editForm.referenceType,
         referenceId: editForm.referenceType === "WORK" ? undefined : editForm.referenceId || undefined
@@ -268,6 +273,14 @@ export default function TasksPage() {
             </select>
           </label>
           <label>
+            Приоритет
+            <select value={createForm.priority} onChange={(event) => setFormField(setCreateForm, "priority", event.target.value)}>
+              <option value="LOW">Низкий</option>
+              <option value="MEDIUM">Средний</option>
+              <option value="HIGH">Высокий</option>
+            </select>
+          </label>
+          <label>
             Дедлайн
             <input
               type="datetime-local"
@@ -334,6 +347,7 @@ export default function TasksPage() {
                     >
                       <strong>{task.title}</strong>
                       <span className="task-card__meta">{taskTypeLabel(task.type)}</span>
+                      <span className={`task-priority-badge ${task.priority.toLowerCase()}`}>{taskPriorityLabel(task.priority)}</span>
                       <span className="task-card__meta">{taskReferenceLabel(task)}</span>
                       {task.description ? <p>{task.description}</p> : null}
                       <span className="task-card__date">
@@ -354,80 +368,95 @@ export default function TasksPage() {
       </section>
 
       {selectedTask ? (
-        <section className="card" style={{ marginTop: 12 }}>
-          <h3>Редактирование задачи</h3>
-          <div className="grid two">
-            <label>
-              Название
-              <input value={editForm.title} onChange={(event) => setFormField(setEditForm, "title", event.target.value)} />
-            </label>
-            <label>
-              Тип
-              <select value={editForm.type} onChange={(event) => setFormField(setEditForm, "type", event.target.value)}>
-                <option value="CALL">Звонок</option>
-                <option value="FOLLOW_UP">Фоллоу-ап</option>
-                <option value="PROPOSAL">КП</option>
-                <option value="MEETING">Встреча</option>
-                <option value="OTHER">Другое</option>
-              </select>
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              Описание
-              <textarea
-                value={editForm.description}
-                onChange={(event) => setFormField(setEditForm, "description", event.target.value)}
-                style={{ width: "100%", minHeight: 74 }}
-              />
-            </label>
-            <label>
-              Статус
-              <select value={editForm.status} onChange={(event) => setFormField(setEditForm, "status", event.target.value)}>
-                {kanbanStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {taskStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Дедлайн
-              <input
-                type="datetime-local"
-                value={editForm.dueAt}
-                onChange={(event) => setFormField(setEditForm, "dueAt", event.target.value)}
-              />
-            </label>
-            <label>
-              Привязка
-              <select
-                value={editForm.referenceType}
-                onChange={(event) => setFormField(setEditForm, "referenceType", event.target.value)}
-              >
-                <option value="WORK">Работа (внутренняя)</option>
-                <option value="LEAD">Лид</option>
-                <option value="CLIENT">Клиент</option>
-              </select>
-            </label>
-            <label>
-              Объект
-              {renderReferenceSelect(editForm, setEditForm)}
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button type="button" onClick={() => setSelectedTaskId(null)}>Отмена</button>
-            <button
-              type="button"
-              onClick={() => void onDeleteTask()}
-              disabled={deleting || saving}
-              style={{ borderColor: "#cc4050", background: "linear-gradient(90deg, #c93f52, #e66073)" }}
-            >
-              {deleting ? "Удаляем..." : "Удалить"}
-            </button>
-            <button type="button" onClick={() => void onSaveTask()} disabled={saving || deleting}>
-              {saving ? "Сохраняем..." : "Сохранить"}
-            </button>
-          </div>
-        </section>
+        <div className="modal-backdrop" onClick={() => setSelectedTaskId(null)}>
+          <section className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Задача</h3>
+              <button type="button" onClick={() => setSelectedTaskId(null)}>Закрыть</button>
+            </div>
+            <div className="modal-content">
+              <div className="grid two">
+                <label>
+                  Название
+                  <input value={editForm.title} onChange={(event) => setFormField(setEditForm, "title", event.target.value)} />
+                </label>
+                <label>
+                  Тип
+                  <select value={editForm.type} onChange={(event) => setFormField(setEditForm, "type", event.target.value)}>
+                    <option value="CALL">Звонок</option>
+                    <option value="FOLLOW_UP">Фоллоу-ап</option>
+                    <option value="PROPOSAL">КП</option>
+                    <option value="MEETING">Встреча</option>
+                    <option value="OTHER">Другое</option>
+                  </select>
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  Описание
+                  <textarea
+                    value={editForm.description}
+                    onChange={(event) => setFormField(setEditForm, "description", event.target.value)}
+                    style={{ width: "100%", minHeight: 74 }}
+                  />
+                </label>
+                <label>
+                  Статус
+                  <select value={editForm.status} onChange={(event) => setFormField(setEditForm, "status", event.target.value)}>
+                    {kanbanStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {taskStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Приоритет
+                  <select value={editForm.priority} onChange={(event) => setFormField(setEditForm, "priority", event.target.value)}>
+                    <option value="LOW">Низкий</option>
+                    <option value="MEDIUM">Средний</option>
+                    <option value="HIGH">Высокий</option>
+                  </select>
+                </label>
+                <label>
+                  Дедлайн
+                  <input
+                    type="datetime-local"
+                    value={editForm.dueAt}
+                    onChange={(event) => setFormField(setEditForm, "dueAt", event.target.value)}
+                  />
+                </label>
+                <label>
+                  Привязка
+                  <select
+                    value={editForm.referenceType}
+                    onChange={(event) => setFormField(setEditForm, "referenceType", event.target.value)}
+                  >
+                    <option value="WORK">Работа (внутренняя)</option>
+                    <option value="LEAD">Лид</option>
+                    <option value="CLIENT">Клиент</option>
+                  </select>
+                </label>
+                <label>
+                  Объект
+                  {renderReferenceSelect(editForm, setEditForm)}
+                </label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setSelectedTaskId(null)}>Отмена</button>
+                <button
+                  type="button"
+                  onClick={() => void onDeleteTask()}
+                  disabled={deleting || saving}
+                  style={{ borderColor: "#cc4050", background: "linear-gradient(90deg, #c93f52, #e66073)" }}
+                >
+                  {deleting ? "Удаляем..." : "Удалить"}
+                </button>
+                <button type="button" onClick={() => void onSaveTask()} disabled={saving || deleting}>
+                  {saving ? "Сохраняем..." : "Сохранить"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );
