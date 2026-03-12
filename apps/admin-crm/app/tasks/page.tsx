@@ -53,6 +53,7 @@ export default function TasksPage() {
   const [clientOptions, setClientOptions] = useState<Lead[]>([]);
 
   const [createForm, setCreateForm] = useState<TaskFormState>(initialFormState);
+  const [createModalStatus, setCreateModalStatus] = useState<Task["status"] | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<TaskFormState>(initialFormState);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -131,6 +132,7 @@ export default function TasksPage() {
         assignee: "владелец"
       });
       setCreateForm(initialFormState);
+      setCreateModalStatus(null);
       await load();
     } catch {
       setError("Не удалось создать задачу.");
@@ -231,86 +233,6 @@ export default function TasksPage() {
       <h2>Задачи</h2>
       {error ? <p className="bad" style={{ marginBottom: 10 }}>{error}</p> : null}
 
-      <section className="card" style={{ marginBottom: 12 }}>
-        <h3>Новая задача</h3>
-        <form className="grid two" onSubmit={onCreateTask}>
-          <label>
-            Название
-            <input
-              required
-              value={createForm.title}
-              onChange={(event) => setFormField(setCreateForm, "title", event.target.value)}
-              placeholder="Например: Подготовить КП для клиента"
-            />
-          </label>
-          <label>
-            Тип
-            <select value={createForm.type} onChange={(event) => setFormField(setCreateForm, "type", event.target.value)}>
-              <option value="CALL">Звонок</option>
-              <option value="FOLLOW_UP">Фоллоу-ап</option>
-              <option value="PROPOSAL">КП</option>
-              <option value="MEETING">Встреча</option>
-              <option value="OTHER">Другое</option>
-            </select>
-          </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            Описание
-            <textarea
-              value={createForm.description}
-              onChange={(event) => setFormField(setCreateForm, "description", event.target.value)}
-              placeholder="Детали задачи"
-              style={{ width: "100%", minHeight: 74 }}
-            />
-          </label>
-          <label>
-            Начальный статус
-            <select value={createForm.status} onChange={(event) => setFormField(setCreateForm, "status", event.target.value)}>
-              {kanbanStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {taskStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Приоритет
-            <select value={createForm.priority} onChange={(event) => setFormField(setCreateForm, "priority", event.target.value)}>
-              <option value="LOW">Низкий</option>
-              <option value="MEDIUM">Средний</option>
-              <option value="HIGH">Высокий</option>
-            </select>
-          </label>
-          <label>
-            Дедлайн
-            <input
-              type="datetime-local"
-              value={createForm.dueAt}
-              onChange={(event) => setFormField(setCreateForm, "dueAt", event.target.value)}
-            />
-          </label>
-          <label>
-            Привязка
-            <select
-              value={createForm.referenceType}
-              onChange={(event) => setFormField(setCreateForm, "referenceType", event.target.value)}
-            >
-              <option value="WORK">Работа (внутренняя)</option>
-              <option value="LEAD">Лид</option>
-              <option value="CLIENT">Клиент</option>
-            </select>
-          </label>
-          <label>
-            Объект
-            {renderReferenceSelect(createForm, setCreateForm)}
-          </label>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <button disabled={submitting} type="submit">
-              {submitting ? "Создаем..." : "Создать задачу"}
-            </button>
-          </div>
-        </form>
-      </section>
-
       <section className="kanban-board" aria-label="Kanban board">
         {kanbanStatuses.map((status) => {
           const tasksByStatus = items.filter((task) => task.status === status);
@@ -329,7 +251,20 @@ export default function TasksPage() {
             >
               <header className="kanban-column__header">
                 <h3>{taskStatusLabel(status)}</h3>
-                <span>{tasksByStatus.length}</span>
+                <div className="kanban-column__actions">
+                  <span>{tasksByStatus.length}</span>
+                  <button
+                    type="button"
+                    className="kanban-add-btn"
+                    title={`Создать задачу в колонке "${taskStatusLabel(status)}"`}
+                    onClick={() => {
+                      setCreateForm({ ...initialFormState, status });
+                      setCreateModalStatus(status);
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
               </header>
               <div className="kanban-column__body">
                 {loading ? (
@@ -359,13 +294,105 @@ export default function TasksPage() {
                     </button>
                   ))
                 ) : (
-                  <p className="muted">Пусто</p>
+                  <div className="kanban-empty">
+                    <p className="muted">Пусто</p>
+                  </div>
                 )}
               </div>
             </article>
           );
         })}
       </section>
+
+      {createModalStatus ? (
+        <div className="modal-backdrop" onClick={() => setCreateModalStatus(null)}>
+          <section className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Новая задача: {taskStatusLabel(createModalStatus)}</h3>
+              <button type="button" onClick={() => setCreateModalStatus(null)}>Закрыть</button>
+            </div>
+            <div className="modal-content">
+              <form className="grid two" onSubmit={onCreateTask}>
+                <label>
+                  Название
+                  <input
+                    required
+                    value={createForm.title}
+                    onChange={(event) => setFormField(setCreateForm, "title", event.target.value)}
+                    placeholder="Например: Подготовить КП для клиента"
+                  />
+                </label>
+                <label>
+                  Тип
+                  <select value={createForm.type} onChange={(event) => setFormField(setCreateForm, "type", event.target.value)}>
+                    <option value="CALL">Звонок</option>
+                    <option value="FOLLOW_UP">Фоллоу-ап</option>
+                    <option value="PROPOSAL">КП</option>
+                    <option value="MEETING">Встреча</option>
+                    <option value="OTHER">Другое</option>
+                  </select>
+                </label>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  Описание
+                  <textarea
+                    value={createForm.description}
+                    onChange={(event) => setFormField(setCreateForm, "description", event.target.value)}
+                    placeholder="Детали задачи"
+                    style={{ width: "100%", minHeight: 74 }}
+                  />
+                </label>
+                <label>
+                  Статус
+                  <select value={createForm.status} onChange={(event) => setFormField(setCreateForm, "status", event.target.value)}>
+                    {kanbanStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {taskStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Приоритет
+                  <select value={createForm.priority} onChange={(event) => setFormField(setCreateForm, "priority", event.target.value)}>
+                    <option value="LOW">Низкий</option>
+                    <option value="MEDIUM">Средний</option>
+                    <option value="HIGH">Высокий</option>
+                  </select>
+                </label>
+                <label>
+                  Дедлайн
+                  <input
+                    type="datetime-local"
+                    value={createForm.dueAt}
+                    onChange={(event) => setFormField(setCreateForm, "dueAt", event.target.value)}
+                  />
+                </label>
+                <label>
+                  Привязка
+                  <select
+                    value={createForm.referenceType}
+                    onChange={(event) => setFormField(setCreateForm, "referenceType", event.target.value)}
+                  >
+                    <option value="WORK">Работа (внутренняя)</option>
+                    <option value="LEAD">Лид</option>
+                    <option value="CLIENT">Клиент</option>
+                  </select>
+                </label>
+                <label>
+                  Объект
+                  {renderReferenceSelect(createForm, setCreateForm)}
+                </label>
+                <div className="modal-actions" style={{ gridColumn: "1 / -1" }}>
+                  <button type="button" onClick={() => setCreateModalStatus(null)}>Отмена</button>
+                  <button disabled={submitting} type="submit">
+                    {submitting ? "Создаем..." : "Создать задачу"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {selectedTask ? (
         <div className="modal-backdrop" onClick={() => setSelectedTaskId(null)}>
