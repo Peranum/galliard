@@ -10,7 +10,7 @@ const links = [
   { href: "/pipeline", label: "Воронка", hint: "Канбан по этапам продаж, чтобы видеть где застревают лиды и что двигать дальше." },
   { href: "/clients", label: "Клиенты", hint: "Лиды на поздних стадиях (Подбор и выше) для ежедневной клиентской работы." },
   { href: "/campaigns", label: "Рассылки", hint: "Запуск и контроль email-рассылок: статусы писем, ответы, возвраты и эффективность.", inDevelopment: true },
-  { href: "/tasks", label: "Задачи", hint: "Операционный список задач: сроки, приоритет и контроль исполнения.", inDevelopment: true }
+  { href: "/tasks", label: "Задачи", hint: "Канбан по задачам: статус, дедлайн, привязка к лидам и клиентам." }
 ];
 
 export function AppShell({ children }: PropsWithChildren) {

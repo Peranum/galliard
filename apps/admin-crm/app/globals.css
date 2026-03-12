@@ -918,6 +918,116 @@ button + button {
   color: var(--success);
 }
 
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.kanban-column {
+  display: grid;
+  gap: 10px;
+  min-height: 300px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 10px;
+}
+
+.kanban-column__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kanban-column__header span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--bg-accent-soft);
+  color: #1f4c89;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.kanban-column__body {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.task-card {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d5e1f2;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f6f9ff);
+  color: #1d2e4b;
+  padding: 10px;
+  cursor: grab;
+  box-shadow: 0 8px 14px rgba(14, 35, 68, 0.1);
+}
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+.task-card.active {
+  border-color: #76a8ff;
+  box-shadow: 0 12px 20px rgba(20, 90, 199, 0.22);
+}
+
+.task-card__meta,
+.task-card__date {
+  font-size: 0.78rem;
+  color: #496183;
+}
+
+.task-card p {
+  margin: 2px 0;
+  color: #2c3f60;
+  font-size: 0.84rem;
+}
+
+.lead-task-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.lead-task-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.lead-task-group h5 {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #1d3558;
+}
+
+.lead-task-group h5 span {
+  font-weight: 500;
+  color: #4a6387;
+}
+
+.lead-task-group ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.lead-task-group li {
+  color: #263f63;
+}
+
 @media (max-width: 1220px) {
   .layout {
     grid-template-columns: 236px 1fr;
@@ -1007,6 +1117,10 @@ button + button {
     grid-template-columns: repeat(9, minmax(238px, 1fr));
   }
 
+  .kanban-board {
+    grid-template-columns: repeat(5, minmax(238px, 1fr));
+  }
+
   .funnel-step {
     width: 100% !important;
     clip-path: none;
@@ -1089,6 +1203,11 @@ button + button {
 
   .pipeline {
     grid-template-columns: repeat(9, minmax(212px, 1fr));
+    gap: 10px;
+  }
+
+  .kanban-board {
+    grid-template-columns: repeat(5, minmax(212px, 1fr));
     gap: 10px;
   }
 

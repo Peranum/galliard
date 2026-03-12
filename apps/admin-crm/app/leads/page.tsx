@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { Lead, LeadContact, LeadStageHistoryEntry } from "@/types/crm";
-import { createLead, getLeadDetails, getLeads, updateLeadDetails, updateLeadStage } from "@/lib/api";
-import { leadStageLabel } from "@/lib/labels";
+import type { Lead, LeadContact, LeadStageHistoryEntry, Task } from "@/types/crm";
+import { createLead, deleteLead, getLeadDetails, getLeads, updateLeadDetails, updateLeadStage } from "@/lib/api";
+import { leadStageLabel, taskStatusLabel } from "@/lib/labels";
 import {
   companyCategoryLabel,
   companyCategoryOptions,
@@ -14,6 +14,7 @@ import { buildLeadStageTimeline, formatDuration, getLeadCurrentStageHours, stage
 
 const stageOptions = ["", "NEW", "CONTACTED", "REPLIED", "QUALIFIED", "SOURCING", "PROPOSAL", "NEGOTIATION", "WON", "LOST"] as const;
 const stageValues = stageOptions.filter((stage): stage is Exclude<(typeof stageOptions)[number], ""> => Boolean(stage));
+const leadTaskStatuses: Task["status"][] = ["PLANNED", "READY", "IN_PROGRESS", "REVIEW", "DONE"];
 const CUSTOM_CATEGORY_OPTION = "__CUSTOM_CATEGORY__";
 const CUSTOM_CATEGORIES_STORAGE_KEY = "galliard_custom_company_categories_v1";
 const categoryExamples = companyCategoryOptions
@@ -90,8 +91,10 @@ export default function LeadsPage() {
   const [leadForm, setLeadForm] = useState<LeadFormState | null>(null);
   const [leadMeta, setLeadMeta] = useState<Lead | null>(null);
   const [leadStageHistory, setLeadStageHistory] = useState<LeadStageHistoryEntry[]>([]);
+  const [leadTasks, setLeadTasks] = useState<Task[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsDeleting, setDetailsDeleting] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
 
   const knownCategoryValues = useMemo(
@@ -221,6 +224,7 @@ export default function LeadsPage() {
       registerCustomCategory(data.lead.companyCategory);
       setLeadMeta(data.lead);
       setLeadStageHistory(data.stageHistory ?? []);
+      setLeadTasks(data.tasks ?? []);
       setLeadForm({
         name: data.lead.name ?? "",
         company: data.lead.company ?? "",
@@ -245,9 +249,11 @@ export default function LeadsPage() {
     setLeadForm(null);
     setLeadMeta(null);
     setLeadStageHistory([]);
+    setLeadTasks([]);
     setDetailsError(null);
     setDetailsLoading(false);
     setDetailsSaving(false);
+    setDetailsDeleting(false);
   }
 
   function updateContact(index: number, field: keyof LeadContact, value: string) {
@@ -311,6 +317,28 @@ export default function LeadsPage() {
       setDetailsError("Не удалось сохранить изменения.");
     } finally {
       setDetailsSaving(false);
+    }
+  }
+
+  async function deleteSelectedLead() {
+    if (!selectedLeadId) return;
+    const label = leadForm?.name?.trim() || selectedLeadId;
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(`Удалить лида "${label}"? Это действие нельзя отменить.`);
+      if (!ok) return;
+    }
+
+    setDetailsDeleting(true);
+    setDetailsError(null);
+    try {
+      await deleteLead(selectedLeadId);
+      closeLeadModal();
+      const nextPage = page > 1 && items.length === 1 ? page - 1 : page;
+      await load(nextPage);
+    } catch {
+      setDetailsError("Не удалось удалить лида.");
+    } finally {
+      setDetailsDeleting(false);
     }
   }
 
@@ -557,6 +585,38 @@ export default function LeadsPage() {
                   </section>
                 ) : null}
 
+                <section className="card" style={{ marginBottom: 12 }}>
+                  <h4>Связанные задачи</h4>
+                  {leadTasks.length ? (
+                    <div className="lead-task-groups">
+                      {leadTaskStatuses.map((status) => {
+                        const tasksByStatus = leadTasks.filter((task) => task.status === status);
+                        return (
+                          <article key={status} className="lead-task-group">
+                            <h5>
+                              {taskStatusLabel(status)} <span>({tasksByStatus.length})</span>
+                            </h5>
+                            {tasksByStatus.length ? (
+                              <ul>
+                                {tasksByStatus.map((task) => (
+                                  <li key={task.id}>
+                                    <strong>{task.title}</strong>
+                                    {task.dueAt ? ` · срок: ${new Date(task.dueAt).toLocaleString()}` : ""}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="muted">Нет задач</p>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="muted">Для этого лида пока нет связанных задач.</p>
+                  )}
+                </section>
+
                 <div className="grid two">
                   <label>
                     Имя
@@ -686,6 +746,17 @@ export default function LeadsPage() {
 
                 <div className="modal-actions">
                   <button type="button" onClick={closeLeadModal}>Отмена</button>
+                  <button
+                    type="button"
+                    disabled={detailsDeleting || detailsSaving}
+                    onClick={() => void deleteSelectedLead()}
+                    style={{
+                      borderColor: "#cc4050",
+                      background: "linear-gradient(90deg, #c93f52, #e66073)"
+                    }}
+                  >
+                    {detailsDeleting ? "Удаляем..." : "Удалить лида"}
+                  </button>
                   <button type="button" disabled={detailsSaving} onClick={() => void saveLeadDetails()}>
                     {detailsSaving ? "Сохраняем..." : "Сохранить"}
                   </button>

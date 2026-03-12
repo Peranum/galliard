@@ -194,6 +194,12 @@ export function updateLead(id: string, payload: {
   });
 }
 
+export function deleteLead(id: string) {
+  return request<{ ok: true }>(`/leads/${id}`, {
+    method: "DELETE"
+  });
+}
+
 export function patchCampaignMessageStatus(id: string, status: "replied" | "bounced" | "unsubscribed" | "delivered") {
   return request<{ ok: true }>(`/campaign-messages/${id}/status`, {
     method: "PATCH",
@@ -202,16 +208,21 @@ export function patchCampaignMessageStatus(id: string, status: "replied" | "boun
 }
 
 export function getTasks(params?: { critical?: boolean }) {
-  const suffix = params?.critical ? "?critical=1" : "";
-  return request<{ items: Task[] }>(`/tasks${suffix}`);
+  const search = new URLSearchParams();
+  if (params?.critical) search.set("critical", "1");
+  const suffix = search.toString();
+  return request<{ items: Task[] }>(`/tasks${suffix ? `?${suffix}` : ""}`);
 }
 
 export function createTask(payload: {
-  leadId?: string;
+  referenceType?: "WORK" | "LEAD" | "CLIENT";
+  referenceId?: string;
   title: string;
+  description?: string;
   type: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
   assignee?: string;
   dueAt?: string;
+  status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
 }) {
   return request<{ id: string }>("/tasks", {
     method: "POST",
@@ -219,10 +230,24 @@ export function createTask(payload: {
   });
 }
 
-export function patchTask(id: string, payload: { title?: string; status?: "OPEN" | "DONE"; dueAt?: string }) {
+export function patchTask(id: string, payload: {
+  title?: string;
+  description?: string;
+  status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
+  dueAt?: string;
+  type?: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
+  referenceType?: "WORK" | "LEAD" | "CLIENT";
+  referenceId?: string;
+}) {
   return request<{ ok: true }>(`/tasks/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
+  });
+}
+
+export function deleteTask(id: string) {
+  return request<{ ok: true }>(`/tasks/${id}`, {
+    method: "DELETE"
   });
 }
 

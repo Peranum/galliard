@@ -50,13 +50,17 @@ export interface LeadDetails {
   notes: string;
   contacts: LeadContact[];
   stageHistory: LeadStageHistoryEntry[];
+  tasks: Task[];
 }
 
 export interface Task {
   id: string;
-  leadId?: string;
+  referenceType: "WORK" | "LEAD" | "CLIENT";
+  referenceId?: string;
   title: string;
+  description?: string;
   type: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
-  status: "OPEN" | "DONE";
+  status: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
   dueAt?: string;
+  createdAt: string;
 }

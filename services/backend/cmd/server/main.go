@@ -30,6 +30,18 @@ import (
 var migrationFiles embed.FS
 
 var orderedStages = []string{"NEW", "CONTACTED", "REPLIED", "QUALIFIED", "SOURCING", "PROPOSAL", "NEGOTIATION", "WON", "LOST"}
+var taskStatusSet = map[string]struct{}{
+	"PLANNED":     {},
+	"READY":       {},
+	"IN_PROGRESS": {},
+	"REVIEW":      {},
+	"DONE":        {},
+}
+var taskReferenceTypes = map[string]struct{}{
+	"WORK":   {},
+	"LEAD":   {},
+	"CLIENT": {},
+}
 var allowedCompanyCategories = map[string]struct{}{
 	"CHEMICALS":              {},
 	"TEXTILE":                {},
@@ -97,12 +109,15 @@ type leadStageHistoryItem struct {
 }
 
 type task struct {
-	ID     string     `json:"id"`
-	LeadID *string    `json:"leadId,omitempty"`
-	Title  string     `json:"title"`
-	Type   string     `json:"type"`
-	Status string     `json:"status"`
-	DueAt  *time.Time `json:"dueAt,omitempty"`
+	ID            string     `json:"id"`
+	ReferenceType string     `json:"referenceType"`
+	ReferenceID   *string    `json:"referenceId,omitempty"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description,omitempty"`
+	Type          string     `json:"type"`
+	Status        string     `json:"status"`
+	DueAt         *time.Time `json:"dueAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 type campaign struct {
@@ -152,7 +167,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://galliard.by", "https://www.galliard.by"},
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Admin-Token"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -172,6 +187,7 @@ func main() {
 		ar.Get("/api/leads", a.handleListLeads)
 		ar.Get("/api/leads/{id}", a.handleGetLeadDetails)
 		ar.Patch("/api/leads/{id}", a.handlePatchLead)
+		ar.Delete("/api/leads/{id}", a.handleDeleteLead)
 		ar.Patch("/api/leads/{id}/details", a.handlePatchLeadDetails)
 		ar.Patch("/api/leads/{id}/stage", a.handlePatchStage)
 		ar.Get("/api/pipeline", a.handlePipeline)
@@ -180,6 +196,7 @@ func main() {
 		ar.Get("/api/tasks", a.handleListTasks)
 		ar.Post("/api/tasks", a.handleCreateTask)
 		ar.Patch("/api/tasks/{id}", a.handlePatchTask)
+		ar.Delete("/api/tasks/{id}", a.handleDeleteTask)
 
 		ar.Get("/api/campaigns", a.handleListCampaigns)
 		ar.Post("/api/campaigns", a.handleCreateCampaign)
@@ -298,9 +315,9 @@ func (a *app) handlePublicCreateLead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO tasks (id, lead_id, title, type, status, assignee, due_at, created_at, updated_at)
-		VALUES ($1,$2,$3,'FOLLOW_UP','OPEN','owner',$4,$5,$5)
-	`, taskID, leadID, "Связаться с новым лидом", due, now)
+		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, assignee, due_at, created_at, updated_at)
+		VALUES ($1,$2,'LEAD',$2,$3,$4,'FOLLOW_UP','READY','owner',$5,$6,$6)
+	`, taskID, leadID, "Связаться с новым лидом", "Первичный контакт с новым лидом из формы сайта.", due, now)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "insert task"})
 		return
@@ -476,6 +493,41 @@ func (a *app) handlePatchLead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (a *app) handleDeleteLead(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "begin tx"})
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx, `DELETE FROM leads WHERE id = $1`, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete lead"})
+		return
+	}
+	if result.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "lead not found"})
+		return
+	}
+
+	payload, _ := json.Marshal(map[string]string{"id": id})
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO activity_log (id, entity_type, entity_id, action, payload, created_at)
+		VALUES ($1,'lead',$2,'deleted',$3,NOW())
+	`, uuid.NewString(), id, payload)
+
+	if err := tx.Commit(ctx); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "commit"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -548,11 +600,43 @@ func (a *app) handleGetLeadDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	taskRows, err := a.db.Query(ctx, `
+		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at
+		FROM tasks
+		WHERE (reference_type IN ('LEAD','CLIENT') AND reference_id = $1)
+		   OR lead_id = $1
+		ORDER BY
+			CASE status
+				WHEN 'PLANNED' THEN 1
+				WHEN 'READY' THEN 2
+				WHEN 'IN_PROGRESS' THEN 3
+				WHEN 'REVIEW' THEN 4
+				WHEN 'DONE' THEN 5
+				ELSE 99
+			END,
+			due_at NULLS LAST,
+			created_at DESC
+	`, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "tasks query"})
+		return
+	}
+	defer taskRows.Close()
+
+	tasks := []task{}
+	for taskRows.Next() {
+		var t task
+		if scanErr := taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt); scanErr == nil {
+			tasks = append(tasks, t)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"lead":         l,
 		"notes":        notes.String,
 		"contacts":     contacts,
 		"stageHistory": stageHistory,
+		"tasks":        tasks,
 	})
 }
 
@@ -755,8 +839,8 @@ func (a *app) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	meetingsMtd := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE type = 'MEETING' AND status = 'DONE' AND updated_at >= date_trunc('month', NOW())`)
 	meetingsPrev := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE type = 'MEETING' AND status = 'DONE' AND updated_at >= date_trunc('month', NOW() - interval '1 month') AND updated_at < date_trunc('month', NOW())`)
 
-	overdueTasks := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE status = 'OPEN' AND due_at IS NOT NULL AND due_at < NOW()`)
-	overduePrev := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE status = 'OPEN' AND due_at IS NOT NULL AND due_at < NOW() - interval '1 day'`)
+	overdueTasks := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE status <> 'DONE' AND due_at IS NOT NULL AND due_at < NOW()`)
+	overduePrev := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM tasks WHERE status <> 'DONE' AND due_at IS NOT NULL AND due_at < NOW() - interval '1 day'`)
 
 	noActivity3d := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM leads WHERE stage NOT IN ('WON','LOST') AND last_activity_at < NOW() - interval '3 day'`)
 	noActivityPrev := scalarInt(ctx, a.db, `SELECT COUNT(*) FROM leads WHERE stage NOT IN ('WON','LOST') AND last_activity_at < NOW() - interval '6 day'`)
@@ -835,9 +919,9 @@ func (a *app) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	criticalTasks := []task{}
 	taskRows, err := a.db.Query(ctx, `
-		SELECT id, lead_id, title, type, status, due_at
+		SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at
 		FROM tasks
-		WHERE status = 'OPEN'
+		WHERE status <> 'DONE'
 		ORDER BY CASE WHEN due_at IS NOT NULL AND due_at < NOW() THEN 0 ELSE 1 END, due_at NULLS LAST, created_at DESC
 		LIMIT 10
 	`)
@@ -845,7 +929,7 @@ func (a *app) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		defer taskRows.Close()
 		for taskRows.Next() {
 			var t task
-			if taskRows.Scan(&t.ID, &t.LeadID, &t.Title, &t.Type, &t.Status, &t.DueAt) == nil {
+			if taskRows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt) == nil {
 				criticalTasks = append(criticalTasks, t)
 			}
 		}
@@ -1072,13 +1156,47 @@ func (a *app) fetchLeads(ctx context.Context, stage string) ([]lead, error) {
 func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	criticalOnly := r.URL.Query().Get("critical") == "1"
-	query := `SELECT id, lead_id, title, type, status, due_at FROM tasks`
-	if criticalOnly {
-		query += ` WHERE status = 'OPEN' AND (due_at < NOW() OR due_at IS NULL)`
-	}
-	query += ` ORDER BY due_at NULLS LAST, created_at DESC LIMIT 200`
+	referenceType := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("referenceType")))
+	referenceID := strings.TrimSpace(r.URL.Query().Get("referenceId"))
 
-	rows, err := a.db.Query(ctx, query)
+	query := `SELECT id, COALESCE(reference_type, 'WORK'), reference_id, title, COALESCE(description, ''), type, status, due_at, created_at FROM tasks`
+	conditions := []string{}
+	args := []any{}
+	argIdx := 1
+	if criticalOnly {
+		conditions = append(conditions, `status <> 'DONE' AND (due_at < NOW() OR due_at IS NULL)`)
+	}
+	if referenceType != "" {
+		if _, ok := taskReferenceTypes[referenceType]; !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid referenceType"})
+			return
+		}
+		conditions = append(conditions, fmt.Sprintf("reference_type = $%d", argIdx))
+		args = append(args, referenceType)
+		argIdx++
+	}
+	if referenceID != "" {
+		conditions = append(conditions, fmt.Sprintf("reference_id = $%d", argIdx))
+		args = append(args, referenceID)
+		argIdx++
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += ` ORDER BY
+		CASE status
+			WHEN 'PLANNED' THEN 1
+			WHEN 'READY' THEN 2
+			WHEN 'IN_PROGRESS' THEN 3
+			WHEN 'REVIEW' THEN 4
+			WHEN 'DONE' THEN 5
+			ELSE 99
+		END,
+		due_at NULLS LAST,
+		created_at DESC
+		LIMIT 500`
+
+	rows, err := a.db.Query(ctx, query, args...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "tasks query"})
 		return
@@ -1088,7 +1206,7 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	items := []task{}
 	for rows.Next() {
 		var t task
-		if err := rows.Scan(&t.ID, &t.LeadID, &t.Title, &t.Type, &t.Status, &t.DueAt); err == nil {
+		if err := rows.Scan(&t.ID, &t.ReferenceType, &t.ReferenceID, &t.Title, &t.Description, &t.Type, &t.Status, &t.DueAt, &t.CreatedAt); err == nil {
 			items = append(items, t)
 		}
 	}
@@ -1099,11 +1217,15 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 func (a *app) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	type req struct {
-		LeadID   *string    `json:"leadId"`
-		Title    string     `json:"title"`
-		Type     string     `json:"type"`
-		Assignee string     `json:"assignee"`
-		DueAt    *time.Time `json:"dueAt"`
+		LeadID        *string    `json:"leadId"`
+		ReferenceType string     `json:"referenceType"`
+		ReferenceID   *string    `json:"referenceId"`
+		Title         string     `json:"title"`
+		Description   string     `json:"description"`
+		Type          string     `json:"type"`
+		Status        string     `json:"status"`
+		Assignee      string     `json:"assignee"`
+		DueAt         *time.Time `json:"dueAt"`
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -1114,17 +1236,42 @@ func (a *app) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "title required"})
 		return
 	}
+	body.ReferenceType = strings.ToUpper(strings.TrimSpace(body.ReferenceType))
+	if body.ReferenceType == "" {
+		body.ReferenceType = "WORK"
+	}
+	if body.ReferenceID == nil && body.LeadID != nil {
+		body.ReferenceType = "LEAD"
+		body.ReferenceID = body.LeadID
+	}
+	if _, ok := taskReferenceTypes[body.ReferenceType]; !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid referenceType"})
+		return
+	}
+	if body.ReferenceType != "WORK" && (body.ReferenceID == nil || strings.TrimSpace(*body.ReferenceID) == "") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "referenceId required for linked task"})
+		return
+	}
 	if body.Type == "" {
 		body.Type = "OTHER"
+	}
+	body.Type = strings.ToUpper(strings.TrimSpace(body.Type))
+	body.Status = strings.ToUpper(strings.TrimSpace(body.Status))
+	if body.Status == "" {
+		body.Status = "PLANNED"
+	}
+	if _, ok := taskStatusSet[body.Status]; !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid task status"})
+		return
 	}
 	if body.Assignee == "" {
 		body.Assignee = "owner"
 	}
 	id := uuid.NewString()
 	_, err := a.db.Exec(ctx, `
-		INSERT INTO tasks (id, lead_id, title, type, status, assignee, due_at, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,'OPEN',$5,$6,NOW(),NOW())
-	`, id, body.LeadID, body.Title, strings.ToUpper(body.Type), body.Assignee, body.DueAt)
+		INSERT INTO tasks (id, lead_id, reference_type, reference_id, title, description, type, status, assignee, due_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+	`, id, body.LeadID, body.ReferenceType, nullIfEmpty(nonEmptyPtrValue(body.ReferenceID)), strings.TrimSpace(body.Title), nullIfEmpty(strings.TrimSpace(body.Description)), body.Type, body.Status, body.Assignee, body.DueAt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create task"})
 		return
@@ -1136,25 +1283,84 @@ func (a *app) handlePatchTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 	type req struct {
-		Title  *string    `json:"title"`
-		Status *string    `json:"status"`
-		DueAt  *time.Time `json:"dueAt"`
+		Title         *string    `json:"title"`
+		Description   *string    `json:"description"`
+		Type          *string    `json:"type"`
+		Status        *string    `json:"status"`
+		DueAt         *time.Time `json:"dueAt"`
+		ReferenceType *string    `json:"referenceType"`
+		ReferenceID   *string    `json:"referenceId"`
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
+
+	if body.Status != nil {
+		status := strings.ToUpper(strings.TrimSpace(*body.Status))
+		if _, ok := taskStatusSet[status]; !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid task status"})
+			return
+		}
+		body.Status = &status
+	}
+
+	if body.Type != nil {
+		taskType := strings.ToUpper(strings.TrimSpace(*body.Type))
+		if taskType == "" {
+			taskType = "OTHER"
+		}
+		body.Type = &taskType
+	}
+
+	if body.ReferenceType != nil {
+		refType := strings.ToUpper(strings.TrimSpace(*body.ReferenceType))
+		if _, ok := taskReferenceTypes[refType]; !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid referenceType"})
+			return
+		}
+		body.ReferenceType = &refType
+		if refType != "WORK" && (body.ReferenceID == nil || strings.TrimSpace(*body.ReferenceID) == "") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "referenceId required for linked task"})
+			return
+		}
+	}
+
+	var normalizedReferenceID any
+	if body.ReferenceID != nil {
+		normalizedReferenceID = nullIfEmpty(strings.TrimSpace(*body.ReferenceID))
+	}
+
 	_, err := a.db.Exec(ctx, `
 		UPDATE tasks
 		SET title = COALESCE($2, title),
 			status = COALESCE($3, status),
 			due_at = COALESCE($4, due_at),
+			description = COALESCE($5, description),
+			type = COALESCE($6, type),
+			reference_type = COALESCE($7, reference_type),
+			reference_id = COALESCE($8, reference_id),
 			updated_at = NOW()
 		WHERE id = $1
-	`, id, body.Title, body.Status, body.DueAt)
+	`, id, body.Title, body.Status, body.DueAt, body.Description, body.Type, body.ReferenceType, normalizedReferenceID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "patch task"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *app) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	result, err := a.db.Exec(ctx, `DELETE FROM tasks WHERE id = $1`, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "delete task"})
+		return
+	}
+	if result.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -1478,6 +1684,13 @@ func nullIfEmpty(v string) any {
 		return nil
 	}
 	return strings.TrimSpace(v)
+}
+
+func nonEmptyPtrValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
 }
 
 func normalizeCompanyCategory(v string) string {

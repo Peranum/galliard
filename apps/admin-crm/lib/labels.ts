@@ -31,7 +31,10 @@ export function taskTypeLabel(type: Task["type"]): string {
 }
 
 const taskStatusLabels: Record<Task["status"], string> = {
-  OPEN: "Открыта",
+  PLANNED: "В планах",
+  READY: "Можно приступать",
+  IN_PROGRESS: "В работе",
+  REVIEW: "На рассмотрение",
   DONE: "Сделана"
 };
 
