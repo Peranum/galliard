@@ -48,6 +48,7 @@ export default function TasksPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyInfo, setCopyInfo] = useState<string | null>(null);
 
   const [leadOptions, setLeadOptions] = useState<Lead[]>([]);
   const [clientOptions, setClientOptions] = useState<Lead[]>([]);
@@ -72,6 +73,18 @@ export default function TasksPage() {
     [items, selectedTaskId]
   );
 
+  const setTaskLinkInUrl = useCallback((taskId?: string) => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (taskId) {
+      url.searchParams.set("taskId", taskId);
+    } else {
+      url.searchParams.delete("taskId");
+    }
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState({}, "", next);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -93,6 +106,25 @@ export default function TasksPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !items.length) return;
+    const taskId = new URLSearchParams(window.location.search).get("taskId");
+    if (!taskId || selectedTaskId === taskId) return;
+    const found = items.find((task) => task.id === taskId);
+    if (!found) return;
+    setSelectedTaskId(found.id);
+    setEditForm({
+      title: found.title,
+      description: found.description ?? "",
+      type: found.type,
+      status: found.status,
+      priority: found.priority,
+      dueAt: toDatetimeLocal(found.dueAt),
+      referenceType: found.referenceType,
+      referenceId: found.referenceId ?? ""
+    });
+  }, [items, selectedTaskId]);
 
   function setFormField(
     setter: Dispatch<SetStateAction<TaskFormState>>,
@@ -141,8 +173,9 @@ export default function TasksPage() {
     }
   }
 
-  function startEdit(task: Task) {
+  const startEdit = useCallback((task: Task) => {
     setSelectedTaskId(task.id);
+    setTaskLinkInUrl(task.id);
     setEditForm({
       title: task.title,
       description: task.description ?? "",
@@ -153,6 +186,25 @@ export default function TasksPage() {
       referenceType: task.referenceType,
       referenceId: task.referenceId ?? ""
     });
+  }, [setTaskLinkInUrl]);
+
+  const closeTaskModal = useCallback(() => {
+    setSelectedTaskId(null);
+    setTaskLinkInUrl(undefined);
+  }, [setTaskLinkInUrl]);
+
+  async function copyTaskLink() {
+    if (!selectedTaskId || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("taskId", selectedTaskId);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopyInfo("Ссылка скопирована");
+      window.setTimeout(() => setCopyInfo(null), 1600);
+    } catch {
+      setCopyInfo("Не удалось скопировать");
+      window.setTimeout(() => setCopyInfo(null), 1600);
+    }
   }
 
   async function onSaveTask() {
@@ -171,7 +223,7 @@ export default function TasksPage() {
         referenceId: editForm.referenceType === "WORK" ? undefined : editForm.referenceId || undefined
       });
       await load();
-      setSelectedTaskId(null);
+      closeTaskModal();
     } catch {
       setError("Не удалось сохранить задачу.");
     } finally {
@@ -189,7 +241,7 @@ export default function TasksPage() {
     setError(null);
     try {
       await deleteTask(selectedTask.id);
-      setSelectedTaskId(null);
+      closeTaskModal();
       await load();
     } catch {
       setError("Не удалось удалить задачу.");
@@ -307,9 +359,11 @@ export default function TasksPage() {
       {createModalStatus ? (
         <div className="modal-backdrop" onClick={() => setCreateModalStatus(null)}>
           <section className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-header task-modal-header">
               <h3>Новая задача: {taskStatusLabel(createModalStatus)}</h3>
-              <button type="button" onClick={() => setCreateModalStatus(null)}>Закрыть</button>
+              <button type="button" className="btn-icon" aria-label="Закрыть" onClick={() => setCreateModalStatus(null)}>
+                ×
+              </button>
             </div>
             <div className="modal-content">
               <form className="grid two" onSubmit={onCreateTask}>
@@ -382,9 +436,9 @@ export default function TasksPage() {
                   Объект
                   {renderReferenceSelect(createForm, setCreateForm)}
                 </label>
-                <div className="modal-actions" style={{ gridColumn: "1 / -1" }}>
-                  <button type="button" onClick={() => setCreateModalStatus(null)}>Отмена</button>
-                  <button disabled={submitting} type="submit">
+                <div className="modal-actions task-modal-actions" style={{ gridColumn: "1 / -1" }}>
+                  <button type="button" className="btn-secondary" onClick={() => setCreateModalStatus(null)}>Отмена</button>
+                  <button className="btn-primary" disabled={submitting} type="submit">
                     {submitting ? "Создаем..." : "Создать задачу"}
                   </button>
                 </div>
@@ -395,11 +449,13 @@ export default function TasksPage() {
       ) : null}
 
       {selectedTask ? (
-        <div className="modal-backdrop" onClick={() => setSelectedTaskId(null)}>
+        <div className="modal-backdrop" onClick={closeTaskModal}>
           <section className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-header task-modal-header">
               <h3>Задача</h3>
-              <button type="button" onClick={() => setSelectedTaskId(null)}>Закрыть</button>
+              <button type="button" className="btn-icon" aria-label="Закрыть" onClick={closeTaskModal}>
+                ×
+              </button>
             </div>
             <div className="modal-content">
               <div className="grid two">
@@ -467,19 +523,27 @@ export default function TasksPage() {
                   {renderReferenceSelect(editForm, setEditForm)}
                 </label>
               </div>
-              <div className="modal-actions">
-                <button type="button" onClick={() => setSelectedTaskId(null)}>Отмена</button>
-                <button
-                  type="button"
-                  onClick={() => void onDeleteTask()}
-                  disabled={deleting || saving}
-                  style={{ borderColor: "#cc4050", background: "linear-gradient(90deg, #c93f52, #e66073)" }}
-                >
-                  {deleting ? "Удаляем..." : "Удалить"}
-                </button>
-                <button type="button" onClick={() => void onSaveTask()} disabled={saving || deleting}>
-                  {saving ? "Сохраняем..." : "Сохранить"}
-                </button>
+              <div className="modal-actions task-modal-actions">
+                <div className="modal-actions__left">
+                  <button type="button" className="btn-ghost" onClick={() => void copyTaskLink()}>
+                    Скопировать ссылку
+                  </button>
+                  {copyInfo ? <span className="muted">{copyInfo}</span> : null}
+                </div>
+                <div className="modal-actions__right">
+                  <button type="button" className="btn-secondary" onClick={closeTaskModal}>Отмена</button>
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    onClick={() => void onDeleteTask()}
+                    disabled={deleting || saving}
+                  >
+                    {deleting ? "Удаляем..." : "Удалить"}
+                  </button>
+                  <button type="button" className="btn-primary" onClick={() => void onSaveTask()} disabled={saving || deleting}>
+                    {saving ? "Сохраняем..." : "Сохранить"}
+                  </button>
+                </div>
               </div>
             </div>
           </section>

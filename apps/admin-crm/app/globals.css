@@ -780,6 +780,11 @@ li + li {
   margin-bottom: 10px;
 }
 
+.task-modal-header {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #dfe8f6;
+}
+
 .modal-content {
   display: grid;
   gap: 12px;
@@ -818,6 +823,77 @@ li + li {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.task-modal-actions {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.modal-actions__left,
+.modal-actions__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  border: 1px solid #c4d5ef;
+  background: #f4f8ff;
+  color: #2d4e7f;
+  box-shadow: none;
+}
+
+.btn-icon:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  background: #eaf2ff;
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, #1465f4, #1f9bf8);
+  border-color: #0f67f8;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #eef3fb;
+  border-color: #c6d6ee;
+  color: #28486f;
+  box-shadow: none;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  background: #e3ecf8;
+}
+
+.btn-danger {
+  background: linear-gradient(90deg, #c93f52, #e66073);
+  border-color: #cc4050;
+  color: #fff;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: #c7d8ee;
+  color: #2f568d;
+  box-shadow: none;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  background: #f4f8ff;
 }
 
 .auth-page {
@@ -930,6 +1006,7 @@ button + button {
 .kanban-column {
   display: grid;
   gap: 10px;
+  grid-template-rows: 64px 1fr;
   min-height: 300px;
   border-radius: 14px;
   border: 1px solid var(--line);
@@ -941,7 +1018,14 @@ button + button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 30px;
+  min-height: 64px;
+  max-height: 64px;
+  overflow: hidden;
+}
+
+.kanban-column__header h3 {
+  margin: 0;
+  line-height: 1.2;
 }
 
 .kanban-column__header span {
@@ -1208,6 +1292,18 @@ button + button {
 
   .modal-actions {
     flex-direction: column-reverse;
+  }
+
+  .task-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-actions__left,
+  .modal-actions__right {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .stage-timeline-line {
