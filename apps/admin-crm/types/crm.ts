@@ -61,7 +61,15 @@ export interface Task {
   description?: string;
   type: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
   status: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH";
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "BLOCKER" | "SOMEDAY";
   dueAt?: string;
+  createdAt: string;
+}
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: string;
+  body: string;
   createdAt: string;
 }

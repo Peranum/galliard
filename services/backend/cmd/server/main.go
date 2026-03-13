@@ -43,9 +43,12 @@ var taskReferenceTypes = map[string]struct{}{
 	"CLIENT": {},
 }
 var taskPrioritySet = map[string]struct{}{
-	"LOW":    {},
-	"MEDIUM": {},
-	"HIGH":   {},
+	"BLOCKER":  {},
+	"CRITICAL": {},
+	"HIGH":     {},
+	"MEDIUM":   {},
+	"LOW":      {},
+	"SOMEDAY":  {},
 }
 var allowedCompanyCategories = map[string]struct{}{
 	"CHEMICALS":              {},
@@ -126,6 +129,14 @@ type task struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
+type taskComment struct {
+	ID        string    `json:"id"`
+	TaskID    string    `json:"taskId"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type campaign struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -203,6 +214,8 @@ func main() {
 		ar.Post("/api/tasks", a.handleCreateTask)
 		ar.Patch("/api/tasks/{id}", a.handlePatchTask)
 		ar.Delete("/api/tasks/{id}", a.handleDeleteTask)
+		ar.Get("/api/tasks/{id}/comments", a.handleListTaskComments)
+		ar.Post("/api/tasks/{id}/comments", a.handleCreateTaskComment)
 
 		ar.Get("/api/campaigns", a.handleListCampaigns)
 		ar.Post("/api/campaigns", a.handleCreateCampaign)
@@ -930,10 +943,13 @@ func (a *app) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		WHERE status <> 'DONE'
 		ORDER BY
 			CASE COALESCE(priority, 'MEDIUM')
-				WHEN 'HIGH' THEN 0
-				WHEN 'MEDIUM' THEN 1
-				WHEN 'LOW' THEN 2
-				ELSE 3
+				WHEN 'BLOCKER' THEN -1
+				WHEN 'CRITICAL' THEN 0
+				WHEN 'HIGH' THEN 1
+				WHEN 'MEDIUM' THEN 2
+				WHEN 'LOW' THEN 3
+				WHEN 'SOMEDAY' THEN 4
+				ELSE 5
 			END,
 			CASE WHEN due_at IS NOT NULL AND due_at < NOW() THEN 0 ELSE 1 END,
 			due_at NULLS LAST,
@@ -1208,10 +1224,13 @@ func (a *app) handleListTasks(w http.ResponseWriter, r *http.Request) {
 			ELSE 99
 		END,
 		CASE COALESCE(priority, 'MEDIUM')
-			WHEN 'HIGH' THEN 0
-			WHEN 'MEDIUM' THEN 1
-			WHEN 'LOW' THEN 2
-			ELSE 3
+			WHEN 'BLOCKER' THEN -1
+			WHEN 'CRITICAL' THEN 0
+			WHEN 'HIGH' THEN 1
+			WHEN 'MEDIUM' THEN 2
+			WHEN 'LOW' THEN 3
+			WHEN 'SOMEDAY' THEN 4
+			ELSE 5
 		END,
 		due_at NULLS LAST,
 		created_at DESC
@@ -1404,6 +1423,80 @@ func (a *app) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *app) handleListTaskComments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	taskID := chi.URLParam(r, "id")
+
+	rows, err := a.db.Query(ctx, `
+		SELECT id, task_id, COALESCE(author, 'Система'), body, created_at
+		FROM task_comments
+		WHERE task_id = $1
+		ORDER BY created_at ASC
+	`, taskID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "task comments query"})
+		return
+	}
+	defer rows.Close()
+
+	items := []taskComment{}
+	for rows.Next() {
+		var c taskComment
+		if scanErr := rows.Scan(&c.ID, &c.TaskID, &c.Author, &c.Body, &c.CreatedAt); scanErr == nil {
+			items = append(items, c)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *app) handleCreateTaskComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	taskID := chi.URLParam(r, "id")
+
+	type req struct {
+		Author string `json:"author"`
+		Body   string `json:"body"`
+	}
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	commentBody := strings.TrimSpace(body.Body)
+	if commentBody == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "comment body required"})
+		return
+	}
+	author := strings.TrimSpace(body.Author)
+	if author == "" {
+		author = "Пользователь"
+	}
+
+	var exists bool
+	if err := a.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1)`, taskID).Scan(&exists); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "task lookup failed"})
+		return
+	}
+	if !exists {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
+		return
+	}
+
+	commentID := uuid.NewString()
+	_, err := a.db.Exec(ctx, `
+		INSERT INTO task_comments (id, task_id, author, body, created_at)
+		VALUES ($1,$2,$3,$4,NOW())
+	`, commentID, taskID, author, commentBody)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create task comment"})
+		return
+	}
+
+	_, _ = a.db.Exec(ctx, `UPDATE tasks SET updated_at = NOW() WHERE id = $1`, taskID)
+	writeJSON(w, http.StatusCreated, map[string]string{"id": commentID})
 }
 
 func (a *app) handleListCampaigns(w http.ResponseWriter, r *http.Request) {

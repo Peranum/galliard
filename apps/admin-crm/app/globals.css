@@ -1123,6 +1123,18 @@ button + button {
   background: #ffe8eb;
 }
 
+.task-priority-badge.blocker {
+  color: #ffffff;
+  border-color: #7b0c19;
+  background: linear-gradient(90deg, #8d0f21, #c22937);
+}
+
+.task-priority-badge.critical {
+  color: #7b0c19;
+  border-color: #f2a0aa;
+  background: #ffd9de;
+}
+
 .task-priority-badge.medium {
   color: #7b4a00;
   border-color: #f3d49a;
@@ -1133,6 +1145,12 @@ button + button {
   color: #1b4b14;
   border-color: #b9e0b3;
   background: #ebfae8;
+}
+
+.task-priority-badge.someday {
+  color: #3a5278;
+  border-color: #c8d8ef;
+  background: #eff5ff;
 }
 
 .task-card p {
@@ -1171,6 +1189,20 @@ button + button {
 
 .lead-task-group li {
   color: #263f63;
+}
+
+.task-comments-block {
+  border: 1px solid #d8e5f6;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fbff;
+  display: grid;
+  gap: 10px;
+}
+
+.task-comment-form {
+  display: grid;
+  gap: 8px;
 }
 
 @media (max-width: 1220px) {

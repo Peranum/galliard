@@ -34,7 +34,7 @@ const taskStatusLabels: Record<Task["status"], string> = {
   PLANNED: "В планах",
   READY: "Можно приступать",
   IN_PROGRESS: "В работе",
-  REVIEW: "На рассмотрение",
+  REVIEW: "Ожидание",
   DONE: "Сделана"
 };
 
@@ -43,9 +43,12 @@ export function taskStatusLabel(status: Task["status"]): string {
 }
 
 const taskPriorityLabels: Record<Task["priority"], string> = {
-  LOW: "Низкий",
+  BLOCKER: "Блокер",
+  CRITICAL: "Критично",
+  HIGH: "Высокий",
   MEDIUM: "Средний",
-  HIGH: "Высокий"
+  LOW: "Низкий",
+  SOMEDAY: "Когда-нибудь"
 };
 
 export function taskPriorityLabel(priority: Task["priority"]): string {

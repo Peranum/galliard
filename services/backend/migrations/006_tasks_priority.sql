@@ -10,6 +10,6 @@ ALTER TABLE tasks
 
 ALTER TABLE tasks
   ADD CONSTRAINT tasks_priority_check
-  CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH'));
+  CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'BLOCKER', 'SOMEDAY'));
 
 CREATE INDEX IF NOT EXISTS idx_tasks_priority_status_due ON tasks(priority, status, due_at);

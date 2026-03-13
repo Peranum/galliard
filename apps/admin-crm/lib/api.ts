@@ -1,4 +1,4 @@
-import type { Lead, LeadDetails, LeadStage, Task } from "@/types/crm";
+import type { Lead, LeadDetails, LeadStage, Task, TaskComment } from "@/types/crm";
 
 export interface DashboardData {
   kpis: {
@@ -223,7 +223,7 @@ export function createTask(payload: {
   assignee?: string;
   dueAt?: string;
   status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
-  priority?: "LOW" | "MEDIUM" | "HIGH";
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "BLOCKER" | "SOMEDAY";
 }) {
   return request<{ id: string }>("/tasks", {
     method: "POST",
@@ -235,7 +235,7 @@ export function patchTask(id: string, payload: {
   title?: string;
   description?: string;
   status?: "PLANNED" | "READY" | "IN_PROGRESS" | "REVIEW" | "DONE";
-  priority?: "LOW" | "MEDIUM" | "HIGH";
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "BLOCKER" | "SOMEDAY";
   dueAt?: string;
   type?: "CALL" | "FOLLOW_UP" | "PROPOSAL" | "MEETING" | "OTHER";
   referenceType?: "WORK" | "LEAD" | "CLIENT";
@@ -250,6 +250,17 @@ export function patchTask(id: string, payload: {
 export function deleteTask(id: string) {
   return request<{ ok: true }>(`/tasks/${id}`, {
     method: "DELETE"
+  });
+}
+
+export function getTaskComments(taskId: string) {
+  return request<{ items: TaskComment[] }>(`/tasks/${taskId}/comments`);
+}
+
+export function createTaskComment(taskId: string, payload: { body: string; author?: string }) {
+  return request<{ id: string }>(`/tasks/${taskId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }
 

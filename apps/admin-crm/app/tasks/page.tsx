@@ -1,8 +1,8 @@
 "use client";
 
 import { Dispatch, FormEvent, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
-import type { Lead, Task } from "@/types/crm";
-import { createTask, deleteTask, getClients, getLeads, getTasks, patchTask } from "@/lib/api";
+import type { Lead, Task, TaskComment } from "@/types/crm";
+import { createTask, createTaskComment, deleteTask, getClients, getLeads, getTaskComments, getTasks, patchTask } from "@/lib/api";
 import { taskPriorityLabel, taskStatusLabel, taskTypeLabel } from "@/lib/labels";
 
 const kanbanStatuses: Task["status"][] = ["PLANNED", "READY", "IN_PROGRESS", "REVIEW", "DONE"];
@@ -47,8 +47,11 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [commentSaving, setCommentSaving] = useState(false);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyInfo, setCopyInfo] = useState<string | null>(null);
+  const [commentBody, setCommentBody] = useState("");
 
   const [leadOptions, setLeadOptions] = useState<Lead[]>([]);
   const [clientOptions, setClientOptions] = useState<Lead[]>([]);
@@ -57,6 +60,7 @@ export default function TasksPage() {
   const [createModalStatus, setCreateModalStatus] = useState<Task["status"] | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<TaskFormState>(initialFormState);
+  const [comments, setComments] = useState<TaskComment[]>([]);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
   const entityLabelMap = useMemo(() => {
@@ -107,25 +111,6 @@ export default function TasksPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !items.length) return;
-    const taskId = new URLSearchParams(window.location.search).get("taskId");
-    if (!taskId || selectedTaskId === taskId) return;
-    const found = items.find((task) => task.id === taskId);
-    if (!found) return;
-    setSelectedTaskId(found.id);
-    setEditForm({
-      title: found.title,
-      description: found.description ?? "",
-      type: found.type,
-      status: found.status,
-      priority: found.priority,
-      dueAt: toDatetimeLocal(found.dueAt),
-      referenceType: found.referenceType,
-      referenceId: found.referenceId ?? ""
-    });
-  }, [items, selectedTaskId]);
-
   function setFormField(
     setter: Dispatch<SetStateAction<TaskFormState>>,
     field: keyof TaskFormState,
@@ -173,9 +158,22 @@ export default function TasksPage() {
     }
   }
 
+  const loadComments = useCallback(async (taskId: string) => {
+    setCommentsLoading(true);
+    try {
+      const data = await getTaskComments(taskId);
+      setComments(data.items);
+    } catch {
+      setError("Не удалось загрузить комментарии задачи.");
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, []);
+
   const startEdit = useCallback((task: Task) => {
     setSelectedTaskId(task.id);
     setTaskLinkInUrl(task.id);
+    setCommentBody("");
     setEditForm({
       title: task.title,
       description: task.description ?? "",
@@ -186,11 +184,36 @@ export default function TasksPage() {
       referenceType: task.referenceType,
       referenceId: task.referenceId ?? ""
     });
-  }, [setTaskLinkInUrl]);
+    void loadComments(task.id);
+  }, [setTaskLinkInUrl, loadComments]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !items.length) return;
+    const taskId = new URLSearchParams(window.location.search).get("taskId");
+    if (!taskId || selectedTaskId === taskId) return;
+    const found = items.find((task) => task.id === taskId);
+    if (!found) return;
+    setSelectedTaskId(found.id);
+    setTaskLinkInUrl(found.id);
+    setCommentBody("");
+    setEditForm({
+      title: found.title,
+      description: found.description ?? "",
+      type: found.type,
+      status: found.status,
+      priority: found.priority,
+      dueAt: toDatetimeLocal(found.dueAt),
+      referenceType: found.referenceType,
+      referenceId: found.referenceId ?? ""
+    });
+    void loadComments(found.id);
+  }, [items, selectedTaskId, loadComments, setTaskLinkInUrl]);
 
   const closeTaskModal = useCallback(() => {
     setSelectedTaskId(null);
     setTaskLinkInUrl(undefined);
+    setComments([]);
+    setCommentBody("");
   }, [setTaskLinkInUrl]);
 
   async function copyTaskLink() {
@@ -247,6 +270,24 @@ export default function TasksPage() {
       setError("Не удалось удалить задачу.");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function onCreateComment(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedTaskId) return;
+    const body = commentBody.trim();
+    if (!body) return;
+    setCommentSaving(true);
+    setError(null);
+    try {
+      await createTaskComment(selectedTaskId, { body, author: "владелец" });
+      setCommentBody("");
+      await loadComments(selectedTaskId);
+    } catch {
+      setError("Не удалось добавить комментарий.");
+    } finally {
+      setCommentSaving(false);
     }
   }
 
@@ -408,9 +449,12 @@ export default function TasksPage() {
                 <label>
                   Приоритет
                   <select value={createForm.priority} onChange={(event) => setFormField(setCreateForm, "priority", event.target.value)}>
-                    <option value="LOW">Низкий</option>
-                    <option value="MEDIUM">Средний</option>
+                    <option value="BLOCKER">Блокер</option>
+                    <option value="CRITICAL">Критично</option>
                     <option value="HIGH">Высокий</option>
+                    <option value="MEDIUM">Средний</option>
+                    <option value="LOW">Низкий</option>
+                    <option value="SOMEDAY">Когда-нибудь</option>
                   </select>
                 </label>
                 <label>
@@ -494,9 +538,12 @@ export default function TasksPage() {
                 <label>
                   Приоритет
                   <select value={editForm.priority} onChange={(event) => setFormField(setEditForm, "priority", event.target.value)}>
-                    <option value="LOW">Низкий</option>
-                    <option value="MEDIUM">Средний</option>
+                    <option value="BLOCKER">Блокер</option>
+                    <option value="CRITICAL">Критично</option>
                     <option value="HIGH">Высокий</option>
+                    <option value="MEDIUM">Средний</option>
+                    <option value="LOW">Низкий</option>
+                    <option value="SOMEDAY">Когда-нибудь</option>
                   </select>
                 </label>
                 <label>
@@ -523,6 +570,37 @@ export default function TasksPage() {
                   {renderReferenceSelect(editForm, setEditForm)}
                 </label>
               </div>
+              <section className="task-comments-block">
+                <h4>Комментарии</h4>
+                {commentsLoading ? (
+                  <p className="muted">Загрузка комментариев...</p>
+                ) : comments.length ? (
+                  <ul className="comments-list">
+                    {comments.map((comment) => (
+                      <li key={comment.id}>
+                        <strong>{comment.author}</strong> · {new Date(comment.createdAt).toLocaleString()}
+                        <br />
+                        <span>{comment.body}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">Комментариев пока нет.</p>
+                )}
+                <form onSubmit={onCreateComment} className="task-comment-form">
+                  <textarea
+                    placeholder="Добавить комментарий"
+                    value={commentBody}
+                    onChange={(event) => setCommentBody(event.target.value)}
+                    style={{ width: "100%", minHeight: 82 }}
+                  />
+                  <div className="modal-actions">
+                    <button type="submit" className="btn-primary" disabled={commentSaving || !commentBody.trim()}>
+                      {commentSaving ? "Добавляем..." : "Добавить комментарий"}
+                    </button>
+                  </div>
+                </form>
+              </section>
               <div className="modal-actions task-modal-actions">
                 <div className="modal-actions__left">
                   <button type="button" className="btn-ghost" onClick={() => void copyTaskLink()}>
