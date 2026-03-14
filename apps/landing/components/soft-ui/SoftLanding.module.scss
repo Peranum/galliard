@@ -77,27 +77,27 @@
 }
 
 .page h1 {
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   font-size: clamp(2rem, 5vw, 3.5rem);
   line-height: 1.15;
   letter-spacing: -0.01em;
 }
 
 .page h2 {
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   line-height: 1.2;
   letter-spacing: -0.005em;
 }
 
 .page h3 {
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   font-size: clamp(1.25rem, 3.2vw, 1.75rem);
   line-height: 1.3;
 }
 
 .page h4 {
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   font-size: 1.2rem;
   line-height: 1.4;
 }
@@ -178,10 +178,10 @@
 .logoWordmark {
   display: inline-block;
   color: #111;
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   font-size: 2rem;
   line-height: 0.9;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.01em;
 }
 
@@ -203,7 +203,7 @@
 
 .desktopNav button,
 .mobileMenu button {
-  font-family: var(--font-brand), serif;
+  font-family: var(--font-logo), serif;
   letter-spacing: 0.01em;
   color: var(--secondary-foreground);
   transition: color 180ms ease;
@@ -869,6 +869,12 @@ textarea.softInput {
 
 .footerBrand .logoBlock {
   margin-bottom: 0.85rem;
+}
+
+.footerBrand .logoWordmark {
+  font-size: 1.86rem;
+  font-weight: 400;
+  font-variation-settings: "wght" 380;
 }
 
 .footerDescription {

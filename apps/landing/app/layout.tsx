@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Manrope, Source_Serif_4 } from "next/font/google";
+import { Cormorant_Garamond, Manrope, Source_Serif_4, Vollkorn } from "next/font/google";
 import { ReactNode } from "react";
 import "@/app/globals.scss";
 
@@ -20,6 +20,13 @@ const cormorant = Cormorant_Garamond({
   variable: "--font-brand",
   display: "swap",
   weight: ["500", "600", "700"]
+});
+
+const vollkorn = Vollkorn({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-logo",
+  display: "swap",
+  weight: ["400", "500", "600", "700"]
 });
 
 export const metadata: Metadata = {
@@ -59,7 +66,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${manrope.variable} ${sourceSerif.variable} ${cormorant.variable}`}>
+      <body className={`${manrope.variable} ${sourceSerif.variable} ${cormorant.variable} ${vollkorn.variable}`}>
         {children}
       </body>
     </html>
