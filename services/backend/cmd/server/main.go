@@ -288,15 +288,16 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 func (a *app) handlePublicCreateLead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	type req struct {
-		Name               string `json:"name"`
-		Company            string `json:"company"`
-		CompanyCategory    string `json:"companyCategory"`
-		CompanySubcategory string `json:"companySubcategory"`
-		Phone              string `json:"phone"`
-		Email              string `json:"email"`
-		Message            string `json:"message"`
-		ContactType        string `json:"contactType"`
-		Source             string `json:"source"`
+		Name               string         `json:"name"`
+		Company            string         `json:"company"`
+		CompanyCategory    string         `json:"companyCategory"`
+		CompanySubcategory string         `json:"companySubcategory"`
+		Phone              string         `json:"phone"`
+		Email              string         `json:"email"`
+		Message            string         `json:"message"`
+		ContactType        string         `json:"contactType"`
+		Source             string         `json:"source"`
+		Metadata           map[string]any `json:"metadata"`
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -342,7 +343,11 @@ func (a *app) handlePublicCreateLead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]any{"source": body.Source})
+	payload, _ := json.Marshal(map[string]any{
+		"source":      body.Source,
+		"contactType": body.ContactType,
+		"metadata":    body.Metadata,
+	})
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO activity_log (id, entity_type, entity_id, action, payload, created_at)
 		VALUES ($1,'lead',$2,'created',$3,$4)
